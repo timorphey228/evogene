@@ -1,113 +1,155 @@
-"""Evidence-weighted origin MECHANISM screens, separate from cross-species conservation.
+"""Transparent, mechanism-agnostic evidence screens.
 
-No claim of posterior probabilities: scores are rule weights and missing tests mean
-an undetermined classification, not a zero biological probability.
+No forced percentages, no trained labels, no gene-name lookups.
+A missing measurement is not negative evidence. Conservation is separate.
 """
 from .origin_tests import screen as legacy_screen
-LABELS={'de_novo':'De novo','dna_duplication':'ДНК-дупликация',
-        'retroposition':'Ретропозиция','transposition':'ДНК-транспозиция / релокация',
-        'fusion':'Слияние / химерное происхождение','unresolved':'Не установлен'}
-ORDER=tuple(LABELS)
+
+LABELS = {
+    "de_novo": "De novo",
+    "dna_duplication": "ДНК-дупликация",
+    "retroposition": "Ретропозиция",
+    "transposition": "Транспозиция / релокация",
+    "fusion": "Слияние / химерный ген",
+}
+KEYS = tuple(LABELS)
+
+
+def _test(key, signals, limitations, observations, assessed, partial=False):
+    if signals:
+        status = "candidate" if not partial else "partial_signal"
+    else:
+        status = "no_signal" if assessed else "not_assessed"
+    return {
+        "mechanism": key,
+        "label": LABELS[key],
+        "status": status,
+        "signals": list(signals),
+        "limitations": list(limitations),
+        "observations": observations,
+        "assessed": bool(assessed),
+        "signal_count": len(signals),
+        # Deliberately no probability / support_percent / invented confidence.
+        "interpretation": "; ".join(signals) if signals else
+        ("Специфический признак не выявлен проведёнными проверками" if assessed
+         else "Не хватает данных для оценки"),
+    }
+
 
 def classify(report):
-    s=legacy_screen(report)
-    retro=report.get('retrocopy_evidence') or {}
-    candidates=retro.get('parent_candidates') or []
-    ref_target=report.get('target_locus') or report.get('target')
-    proteins=report.get('protein_evidence') or {}
-    protein_candidates=proteins.get('candidates') or []
-    focal_target=retro.get('target_model') or {}
-    eligible_protein_parents=[
-        x for x in protein_candidates if x.get('gene_model') and
-        not x.get('overlaps_target') and
-        x['gene_model'].get('cds_exons',0)>=2 and
-        focal_target.get('status')=='annotated' and
-        focal_target.get('exon_count')==1 and
-        ref_target and x['gene_model']['chrom']!=ref_target.get('chrom') and
-        x.get('identity',0)>=.32 and x.get('query_coverage',0)>=.40
+    ancestry = legacy_screen(report)
+    synteny = report.get("synteny_evidence") or {}
+    protein = report.get("protein_evidence") or {}
+    parent = report.get("retrocopy_evidence") or {}
+    target = report.get("target_locus") or report.get("target") or {}
+    model = parent.get("target_model") or {}
+    focal_ok = bool(report.get("focal_reference"))
+    annotated_target = model.get("status") == "annotated"
+    matched = ancestry["ancestral_conservation"]["observations"]["dna_match_species"]
+    coding = ancestry["ancestral_conservation"]["observations"]["cds_overlap_species"]
+    noncoding = ancestry["de_novo"]["observations"]["syntenic_noncds_species"]
+    displaced = ancestry["transposition"]["observations"]["putative_displaced_homolog_species"]
+    mosaic = ancestry["other_mechanism"]["observations"]["split_homology_species"]
+    extras = report.get("extra_target_copies") or []
+    prot_matches = protein.get("candidates") or []
+    prot_paralogs = [
+        c for c in prot_matches
+        if c.get("gene_model") and not c.get("overlaps_target")
+        and c.get("identity", 0) >= .35 and
+        c.get("query_coverage", 0) >= .50
     ]
-    protein_paralogs=[
-        x for x in protein_candidates if x.get('gene_model') and ref_target and
-        not x.get('overlaps_target') and
-        x.get('identity',0)>=.35 and x.get('query_coverage',0)>=.50
+    cds_parent_candidates = [
+        c for c in prot_paralogs
+        if c["gene_model"].get("cds_exons", 0) >= 2
     ]
-    positive_retro=[x for x in candidates if x.get('parent_multi_exon_and_target_single_exon')]
-    dup=report.get('extra_target_copies') or []
-    synteny=report.get('synteny_evidence') or {}
-    errors=report.get('download_or_analysis_errors') or []
-    errors2=report.get('origin_screen_errors') or []
-    outgroup_noncds=s['de_novo']['observations']['syntenic_noncds_species']
-    cdss=s['ancestral_conservation']['observations']['cds_overlap_species']
-    relocated=s['transposition']['observations']['putative_displaced_homolog_species']
-    mosaic=s['other_mechanism']['observations']['split_homology_species']
-    usable_target=retro.get('target_model',{}).get('status')=='annotated'
-    target_reference_done=bool(report.get('focal_reference'))
-    # Prevent DNA/CDS conservation from competing with mechanism hypotheses.
-    w={'de_novo':0,'dna_duplication':0,'retroposition':0,
-       'transposition':0,'fusion':0}
-    # De novo: outgroup syntenic non-CDS evidence, not merely absent hit.
-    if len(outgroup_noncds)>=2 and not dup and not cdss:
-        w['de_novo']=7
-    if dup or protein_paralogs:
-        # Additional DNA or protein-coding loci indicate duplication broadly, but are also
-        # compatible with retroposition; reduce nonspecific score when retro signal.
-        w['dna_duplication']=min(6,2+2*len(dup)+2*len(protein_paralogs))
-    if positive_retro or eligible_protein_parents:
-        w['retroposition']=10
-        w['dna_duplication']=min(w['dna_duplication'],2)
-    if relocated:
-        w['transposition']=min(6,2+2*len(relocated))
-    if mosaic:
-        w['fusion']=min(6,2+2*len(mosaic))
-    # Meaningful unresolved mass; missing target annotation and tool errors
-    # increase uncertainty, not competing mechanism scores.
-    unresolved=8+2*len(errors)+2*len(errors2)+(3 if not usable_target else 0)
-    if not target_reference_done:unresolved+=4
-    w['unresolved']=unresolved
-    summed=sum(w.values())
-    raw={k:1000*w[k]/summed for k in ORDER}
-    units={k:int(raw[k]) for k in ORDER}
-    ranked=sorted(ORDER,key=lambda k:(-(raw[k]-units[k]),ORDER.index(k)))
-    for k in ranked[:1000-sum(units.values())]:units[k]+=1
-    statuses={}
-    reasons={
-        'de_novo':f"Синтенные участки без CDS у {len(outgroup_noncds)} видов; нужны предковый ORF и белковые гомологи.",
-        'dna_duplication':f"ДНК-локусов: {len(dup)}; белковых гомологов-кандидатов: {len(protein_paralogs)}. Нужна филогения паралогов.",
-        'retroposition':f"Кандидатов по структуре CDS и ДНК: {len(positive_retro)}; по белковому сходству и структуре CDS: {len(eligible_protein_parents)}. Нужно подтвердить направление происхождения.",
-        'transposition':f"Признаки смещения гомолога при сохранённых фланках: {len(relocated)} видов; нужны признаки вставки.",
-        'fusion':f"Два независимых выравнивания разных фрагментов гена обнаружены у {len(mosaic)} видов; требуется валидация.",
-        'unresolved':'Часть необходимых тестов не выполнена или свидетельства неоднозначны.'
+    dna_parent_candidates = [
+        c for c in parent.get("parent_candidates", [])
+        if c.get("parent_multi_exon_and_target_single_exon")
+    ]
+    # Intron-containing targets may be impossible to translate in a single ORF.
+    # Failure to identify the parent is a sensitivity limitation, not evidence
+    # that parent proteins do not exist.
+    retro_signals = []
+    if annotated_target and model.get("exon_count") == 1:
+        if dna_parent_candidates:
+            retro_signals.append("Одноэкзонный CDS и многоэкзонный гомолог в референсе (ДНК)")
+        if cds_parent_candidates:
+            retro_signals.append("Одноэкзонный CDS и белковый гомолог с несколькими CDS-экзонами")
+    elif cds_parent_candidates or dna_parent_candidates:
+        retro_signals.append("Кандидат родительского гена найден, но структура CDS потомка неизвестна")
+
+    duplicated = []
+    if extras:
+        duplicated.append(f"Дополнительных сходных ДНК-локусов: {len(extras)}")
+    if prot_paralogs:
+        duplicated.append(f"Белковых гомологов в другом локусе: {len(prot_paralogs)}")
+
+    denovo_signals = []
+    if noncoding:
+        denovo_signals.append(
+            f"Гомологичная ДНК без аннотированного CDS в синтенном окружении у {len(noncoding)} видов"
+        )
+    # One or two non-CDS homologs are suggestive but cannot prove that
+    # an ancestral ORF was absent. Do not hard-require two species or silence
+    # a weak signal because coding homologs exist elsewhere.
+    relocation_signals = ([f"Похожие последовательности вне синтенного интервала у {len(displaced)} видов"]
+                          if displaced else [])
+    fusion_signals = ([f"Независимые совпадения разных участков запроса у {len(mosaic)} видов"]
+                      if mosaic else [])
+
+    items = [
+        _test("de_novo", denovo_signals,
+              ["Отсутствие аннотированного CDS не доказывает некодирующее прошлое",
+               "Нужны реконструкция предковой ORF и поиск удалённых белковых гомологов"],
+              {"syntenic_no_cds_species": noncoding, "coding_overlap_species": coding},
+              bool(synteny), partial=True),
+        _test("dna_duplication", duplicated,
+              ["ДНК-повторы и белковая гомология не определяют направление дупликации",
+               "Нужны проверка геномного контекста и филогения паралогов"],
+              {"extra_genomic_loci": extras[:10], "protein_paralogs": prot_paralogs[:10]},
+              focal_ok and bool(target), partial=bool(prot_paralogs and not extras)),
+        _test("retroposition", retro_signals,
+              ["Необходимо независимо подтвердить родство и направление копирования",
+               "Индивидуальный FASTA гена с интронами может не переводиться в полноценный белок",
+               "Структура CDS и отсутствие интронов требуют аннотации"],
+              {"target_cds": model, "dna_parent_candidates": dna_parent_candidates[:10],
+               "protein_parent_candidates": cds_parent_candidates[:10],
+               "protein_search_status": protein.get("status", "not_run")},
+              annotated_target and protein.get("status") == "searched",
+              partial=not (annotated_target and model.get("exon_count") == 1)),
+        _test("transposition", relocation_signals,
+              ["Смещение гомолога не доказывает транспозицию: возможны геномные перестройки"],
+              {"displaced_species": displaced},
+              bool(synteny)),
+        _test("fusion", fusion_signals,
+              ["Сборочные артефакты, повторы и перестройки могут имитировать слияние"],
+              {"independent_query_segment_species": mosaic},
+              bool(report.get("relatives"))),
+    ]
+    candidates = [x["mechanism"] for x in items if x["status"] in ("candidate", "partial_signal")]
+    not_assessed = [x["mechanism"] for x in items if x["status"] == "not_assessed"]
+    errors = (report.get("download_or_analysis_errors") or []) + (
+        report.get("origin_screen_errors") or [])
+    return {
+        "kind": "independent_evidence_matrix_v4",
+        "is_calibrated_probability": False,
+        "options": items, "tests": items,
+        "candidate_mechanisms": candidates,
+        "leading_candidate": candidates[0] if len(candidates) == 1 else None,
+        "completeness": {"assessed": len(items) - len(not_assessed),
+                         "total": len(items), "not_assessed": not_assessed,
+                         "processing_errors": errors},
+        "conservation": {
+            "dna_homology_species": matched,
+            "cds_overlap_species": coding,
+            "syntenic_coding_species": ancestry["ancestral_conservation"]["observations"]["syntenic_coding_species"],
+            "explanation": "Межвидовая сохранность НЕ является механизмом возникновения.",
+        },
+        "conclusion": (
+            "Обнаружены признаки нескольких механизмов; нужен разбор конкурирующих объяснений."
+            if len(candidates) > 1 else
+            "Есть предварительные признаки: " + LABELS[candidates[0]] + ". Нужна независимая проверка."
+            if candidates else "Специфические признаки не установлены; это не подтверждение отсутствия механизмов."
+        ),
+        "warning": "Проценты удалены: нет валидированной вероятностной модели. Каждый механизм оценивается отдельно.",
     }
-    observations={
-        'de_novo':{'syntenic_noncoding_candidate_species':outgroup_noncds,
-                   'coding_hits':cdss},
-        'dna_duplication':{'additional_loci':dup[:12], 'protein_paralogs':protein_paralogs[:10]},
-        'retroposition':{'dna_architecture':retro,'protein_parent_candidates':eligible_protein_parents[:10],
-                         'protein_homology_screen':proteins.get('status','not_run')},
-        'transposition':{'displaced_loci_species':relocated},
-        'fusion':{'mosaic_species':mosaic},
-        'unresolved':{'errors':errors,'origin_screen_errors':errors2}
-    }
-    tests=[]
-    for k in ORDER:
-        state='candidate' if w[k] and k!='unresolved' else (
-              'unresolved' if k=='unresolved' else 'not_supported_by_current_tests')
-        tests.append({'mechanism':k,'label':LABELS[k],'status':state,
-                      'support_percent':units[k]/10,
-                      'evidence_weight':w[k],'interpretation':reasons[k],
-                      'observations':observations[k]})
-    possibilities=[k for k in ORDER if k!='unresolved' and w[k]]
-    most=max(possibilities,key=lambda k:w[k]) if possibilities else None
-    return {'kind':'normalized_mechanism_evidence_not_probabilities',
-            'is_calibrated_probability':False,
-            'tests':tests,'options':tests,
-            'leading_candidate':most,
-            'conclusion':('Предварительный кандидат: '+LABELS[most]+
-                          '. Для подтверждения нужны независимые проверки.'
-                          if most else 'Механизм возникновения гена не установлен.'),
-            'conservation':{
-                'dna_homology_species':s['ancestral_conservation']['observations']['dna_match_species'],
-                'cds_overlap_species':cdss,
-                'syntenic_coding_species':s['ancestral_conservation']['observations']['syntenic_coding_species'],
-                'explanation':'Это отдельная характеристика сохранности, НЕ механизм возникновения.'},
-            'warning':'Проценты отражают эвристические веса свидетельств, а не вероятности. Непроверенный механизм не исключён.'}
