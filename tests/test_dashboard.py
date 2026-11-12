@@ -31,7 +31,8 @@ class DashboardTests(unittest.TestCase):
             from streamlit.testing.v1 import AppTest
         except ImportError:
             self.skipTest("Streamlit AppTest not installed")
-        app=AppTest.from_file("auto_app.py").run(timeout=25)
+        from pathlib import Path
+        app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/"auto_app.py")).run(timeout=25)
         self.assertFalse(app.exception)
         self.assertTrue(any("EvoGene" in msg.value for msg in app.markdown))
 
