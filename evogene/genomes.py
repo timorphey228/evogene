@@ -3,6 +3,8 @@ from dataclasses import dataclass,asdict
 import gzip, subprocess, shutil, tempfile
 from pathlib import Path
 from .origin_tests import distribute
+from .mechanism_v3 import classify
+from .gene_models import compare_retrocopy
 from .tools import find_tool
 
 def lines(path):
@@ -105,6 +107,14 @@ def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
     elif len(coding)>=2: hyp='conserved_coding_candidate'; explanation='Similar loci overlap coding annotations in at least two relatives, but orthology is not verified.'
     elif any(passing.values()): hyp='conserved_dna_locus_origin_unresolved'; explanation='DNA similarities exist, but synteny and ancestral coding status are not established.'
     else: hyp='unresolved_no_detectable_hit'; explanation='No hits pass thresholds; missing hits do NOT prove de novo origin.'
+    # Inspect local self hits and CDS exon structure for putative retrocopies.
+    target_locus={'chrom':feature['chrom'],'start':feature['start'],
+                  'end':feature['end'],'strand':feature['strand']}
+    relaxed=[h for h in self_hits if h['query_coverage']>=.25 and
+             h['identity_approx']>=.60 and
+             not (h['chrom']==feature['chrom'] and
+                  min(h['end'],feature['end'])>max(h['start'],feature['start']))][:30]
+    retrocopy_evidence=compare_retrocopy(target_locus,relaxed,target_gff)
     from .genome_probes import focal_flanks, assess_synteny
     origin_screen_errors=[]; synteny_evidence={}
     flanks=focal_flanks(target_fasta,feature)
@@ -119,10 +129,13 @@ def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
             'end_0based':feature['end'],'length_nt':len(query)},
             'hypothesis':hyp,'explanation':explanation,'relatives':out,'extra_target_copies':extras,
             'synteny_evidence':synteny_evidence,'origin_screen_errors':origin_screen_errors,
+            'retrocopy_evidence':retrocopy_evidence,
+            'focal_reference':{'species':'target','annotation_available':True},
             'coding_annotation_species':coding,
             'limitations':['DNA matches do not establish orthology or synteny; inspect flanking genes.',
                            'No CDS overlap is not proof of noncoding ancestry.',
                            'No hit is not proof of absence or de novo origin.',
                            'Gene tree, paralog search and protein analyses remain necessary.']}
-    result['origin_support'] = distribute(result)
+    result['origin_support'] = distribute(result)  # Deprecated
+    result['mechanism_report'] = classify(result)
     return result

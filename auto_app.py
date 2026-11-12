@@ -35,6 +35,7 @@ if st.button('Скачать геномы NCBI и запустить анали�
              disabled=not all(status['ok'] for status in tools_status.values())):
     if not f:st.error('Загрузите FASTA')
     else:
+        st.session_state.pop('auto_report',None)
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/('target'+''.join(Path(f.name).suffixes))
             path.write_bytes(f.getvalue())

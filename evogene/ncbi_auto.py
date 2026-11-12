@@ -7,6 +7,8 @@ import json, re, shutil, subprocess, zipfile
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
 from .origin_tests import distribute
+from .mechanism_v3 import classify
+from .gene_models import compare_retrocopy
 from .tools import find_tool
 from .genome_probes import discover_target_locus, focal_flanks, assess_synteny
 
@@ -129,10 +131,22 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     # Evidence screens: focal copies and conserved DNA flanks from focal reference.
     # Failure to establish synteny must stay unknown, not become evidence of absence.
     extra_target_copies=[]; synteny_evidence={}; origin_screen_errors=[]
+    parent_candidates=[]; retrocopy_evidence={}; focal_reference=None
     try:
         if progress:progress('NCBI: target reference for paralogy and synteny screens')
         focal_assembly=download(target_species,cache)
+        focal_reference={'species':target_species,'accession':focal_assembly['accession'],
+                         'annotation_available':bool(focal_assembly['gff'])}
         main,extra_target_copies=discover_target_locus(query,focal_assembly['fasta'])
+        # Looser self-matches can include a parent gene separated by introns.
+        # They are candidate homologs, never automatically confirmed parents.
+        if main is not None:
+            self_hits=map_genome(query,focal_assembly['fasta'],'target')
+            parent_candidates=[h for h in self_hits
+                if h['query_coverage']>=.25 and h['identity_approx']>=.60 and
+                not (h['chrom']==main['chrom'] and
+                     min(h['end'],main['end'])>max(h['start'],main['start']))][:30]
+        retrocopy_evidence=compare_retrocopy(main,parent_candidates,focal_assembly['gff'])
         if main is None:
             origin_screen_errors.append('Target locus cannot be mapped to focal reference; synteny unavailable')
         else:
@@ -158,6 +172,7 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
             'ncbi_assemblies':selected,'download_or_analysis_errors':failures,'relatives':hits,
             'extra_target_copies':extra_target_copies,'synteny_evidence':synteny_evidence,
             'origin_screen_errors':origin_screen_errors,
+            'focal_reference':focal_reference,'retrocopy_evidence':retrocopy_evidence,
             'limitations':['DNA mapping alone does not prove orthology, synteny or de novo origin.',
               'No CDS overlap is not proof of noncoding ancestry.',
               'No mapping hit is not proof of absence.',
@@ -169,5 +184,6 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     ] + [{'species':failure['species'],'status':'failed','error':failure['error']}
          for failure in failures]
     result['query_length_nt']=len(query)
-    result['origin_support'] = distribute(result)
+    result['origin_support'] = distribute(result)  # Deprecated, retained for legacy integrations
+    result['mechanism_report'] = classify(result)
     return result
