@@ -24,6 +24,7 @@ from Bio import SeqIO
 
 from . import ncbi_auto
 from .genomes import map_genome
+from .tools import find_tool
 from .phylogeny import infer_report_tree
 from .syntenic_orf import survey_syntenic_orfs
 
@@ -70,7 +71,7 @@ def _versions():
         ("mafft", ["mafft", "--version"]),
         ("iqtree", ["iqtree2", "--version"]),
     ):
-        exe=shutil.which(command[0])
+        exe=find_tool(command[0])
         out[name]={"path":exe,"version":None}
         if exe:
             try:
@@ -273,6 +274,13 @@ def run_project(fasta_input, focal_species, comparison_species, *,
                 tree={"status":"not_assessed","newick":None,
                       "reason":"Phylogeny option disabled by user"}
             core["phylogeny"]=tree
+            for diagnostic in tree.get("diagnostics",[]):
+                log(gene_id,"phylogeny_external_tool",
+                    "completed" if diagnostic.get("return_code")==0 else "failed",
+                    diagnostic.get("tool","external")+"; exit="+str(diagnostic.get("return_code")),
+                    command=diagnostic.get("command"),
+                    stderr_tail=diagnostic.get("stderr_tail"),
+                    error=diagnostic.get("error"))
             log(gene_id,"phylogeny","completed" if tree.get("newick") else "skipped",
                 f"{tree.get('method')}; taxa={tree.get('taxa',0)}; status={tree['status']}",
                 support_type=tree.get("support_type"))
