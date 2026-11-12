@@ -215,12 +215,20 @@ def run_project(fasta_input, focal_species, comparison_species, *,
     root=Path(output_folder)/run_id if output_folder is not None else None
     if root is not None:
         root.mkdir(parents=True,exist_ok=True)
+        (root/"candidate_genes.fasta").write_bytes(input_bytes)
+        if te_library is not None:
+            te_path=Path(te_library)
+            if te_path.stat().st_size <= 25 * 1024 * 1024:
+                shutil.copyfile(te_path,root/"te_library.fasta")
     audit=[]
     versions=_versions()
     summary={
         "schema":"evogene-comparative-pipeline-v1",
         "run_id":run_id, "started_at_utc":started,
         "output_folder":str(root) if root is not None else None,
+        "files_preserved":(["candidate_genes.fasta"] +
+                           (["te_library.fasta"] if root is not None and
+                             (root/"te_library.fasta").exists() else [])) if root is not None else [],
         "input_sha256":sha256(input_bytes).hexdigest(),
         "focal_species":focal_species,
         "requested_comparison_species":species,
