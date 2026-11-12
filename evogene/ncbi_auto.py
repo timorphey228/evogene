@@ -159,5 +159,12 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
               'No CDS overlap is not proof of noncoding ancestry.',
               'No mapping hit is not proof of absence.',
               'Relative panel is curated, not inferred phylogenetically.']}
+    result['species_status']=[
+        {'species':species,'status':('matched' if species in matching else 'no_alignment'),
+         'alignment_count':len(hits[species]),'passing_count':len(valid[species])}
+        for species in hits
+    ] + [{'species':failure['species'],'status':'failed','error':failure['error']}
+         for failure in failures]
+    result['query_length_nt']=len(query)
     result['origin_support'] = distribute(result)
     return result

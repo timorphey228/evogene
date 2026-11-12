@@ -1,5 +1,5 @@
 """Run with: streamlit run auto_app.py"""
-import json,tempfile
+import json,tempfile,re
 from pathlib import Path
 import streamlit as st
 from evogene.ncbi_auto import PANEL,analyze
@@ -37,6 +37,18 @@ if st.button('Скачать геномы NCBI и запустить анали�
             status.empty()
 if 'auto_report' in st.session_state:
     r=st.session_state['auto_report']
+    st.subheader('Проверка всех выбранных видов')
+    if r.get('species_status'):
+        labels={'matched':'Найдено сходство','no_alignment':'Выравниваний нет','failed':'Ошибка обработки'}
+        st.dataframe([{'Вид':entry['species'],
+                       'Статус':labels.get(entry['status'],entry['status']),
+                       'Всего попаданий':entry.get('alignment_count',0),
+                       'Прошли порог':entry.get('passing_count',0),
+                       'Ошибка':entry.get('error','')}
+                      for entry in r['species_status']],
+                     use_container_width=True,hide_index=True)
+    st.caption('Пустая таблица по виду означает отсутствие выравниваний при текущих настройках; '
+               'это не доказательство отсутствия гена.')
     st.subheader('Итог: варианты эволюционного происхождения')
     support = r.get('origin_support')
     if support:
@@ -66,5 +78,21 @@ if 'auto_report' in st.session_state:
     st.write('Download errors:',r['download_or_analysis_errors'])
     st.write('Limitations:',r['limitations'])
     for s,hits in r['relatives'].items():
-        with st.expander(s):st.dataframe(hits)
-    st.download_button('Download JSON report',json.dumps(r,indent=2,ensure_ascii=False),gene+'.json')
+        with st.expander(s):
+            if hits:st.dataframe(hits)
+            else:st.info('Сравнение выполнено, но minimap2 не нашёл выравниваний '
+                         'при текущих настройках. Это не доказывает отсутствие гена.')
+    st.subheader('Полный JSON-отчёт')
+    payload=json.dumps(r,indent=2,ensure_ascii=False).encode('utf-8')
+    safe_name=re.sub(r'[^A-Za-z0-9_.-]+','_',str(r.get('gene_id','gene')))[:100]
+    st.download_button('Скачать JSON-отчёт',data=payload,
+                       file_name=safe_name+'.json',mime='application/json',
+                       key='auto_json_download',use_container_width=True)
+    st.caption('Если скачивание в браузере не происходит, локальная копия сохранена по пути ниже.')
+    local_path=Path('results/auto_ncbi')/(safe_name+'.json')
+    try:
+        local_path.parent.mkdir(parents=True,exist_ok=True)
+        local_path.write_bytes(payload)
+        st.code(str(local_path.resolve()))
+    except OSError as exc:
+        st.warning('Не удалось сохранить JSON локально: '+str(exc))
