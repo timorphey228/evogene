@@ -11,6 +11,7 @@ from .gene_models import compare_retrocopy
 from .protein_screen import protein_homology
 from .tools import find_tool
 from .genome_probes import discover_target_locus, focal_flanks, assess_synteny
+from .orf import find_orfs
 
 def fasta_iter(path):
     return fasta(path)
@@ -231,7 +232,8 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
                 try:
                     emit('synteny','running','Сравнение левого и правого флангов',species)
                     synteny_evidence[species]=assess_synteny(
-                        flanks,hits[species],assembly['fasta'],species)
+                        flanks,hits[species],assembly['fasta'],species,
+                        query=query,gff_path=assembly.get('gff'))
                     detail=(str(synteny_evidence[species].get('status'))+': '+
                             str(synteny_evidence[species].get('locus_status')))
                     rescued=synteny_evidence[species].get('local_rescue')
@@ -254,7 +256,19 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     category=('conserved_coding_candidate' if len(coding)>=2 else
               'conserved_dna_locus_origin_unresolved' if matching else
               'unresolved_no_detectable_hit')
+    # Genomic uninterrupted ORFs are diagnostic only; exon-spliced CDS
+    # and ancestral ORF status require independent annotations/alignments.
+    orf_skipped = len(query) > 100_000
+    query_orfs = ([o.to_dict() for o in find_orfs(query, min_aa=25)[:80]]
+                  if not orf_skipped else [])
     report={
+        'query_orfs':query_orfs,
+        'orf_note':('ORF scan skipped for DNA >100 kb. Supply spliced CDS for coding analysis.'
+                   if orf_skipped else
+                   'Candidate ATG-to-stop ORFs in the submitted contiguous DNA (both strands; >=25 aa). '
+                   'NOT spliced CDS, ancestral coding state or verified translation.'),
+        'phylogeny':{'status':'not_assessed',
+                     'reason':'No verified homologous protein MSA, model selection or ML tree is computed.'},
         'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
         'hypothesis':category,'query_length_nt':len(query),
         'matching_species':matching,'coding_species':coding,'ncbi_assemblies':selected,
