@@ -61,7 +61,7 @@ class VisualizationTests(unittest.TestCase):
 
     def test_paf_cigar_insertion_deletion(self):
         from evogene.genomes import cigar_gap_summary
-        self.assertEqual(cigar_gap_summary(["cg:Z:12M3I2D10M"] * 0 + [""] * 12 + ["cg:Z:12M3I2D10M"]),
+        self.assertEqual(cigar_gap_summary([""] * 12 + ["cg:Z:12M3I2D10M"]),
                          {"alignment_insertion_nt": 3, "alignment_deletion_nt": 2})
         self.assertIsNone(cigar_gap_summary([""] * 12)["alignment_deletion_nt"])
         rows = alignment_gap_rows({"relatives": {"a": [{
