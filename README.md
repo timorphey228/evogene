@@ -1,54 +1,36 @@
-# EvoGene v2 — анализ геномных последовательностей
+# EvoGene — evolutionary gene-origin screening
 
-Два режима анализа:
+Upload a single-gene DNA FASTA, select *Drosophila* reference species and relatives, and run NCBI Datasets + minimap2. EvoGene downloads available genomes/GFF3 and produces **independent mechanistic evidence screens** for de novo, duplication, retroposition, relocation, and gene fusion, with conservation shown separately.
 
-1. **genomes**: FASTA целевого генома + GFF3 (с координатами выбранного гена) + FASTA родственных видов и, желательно, их GFF3. Реальное сопоставление ДНК с помощью minimap2, оценка покрытия и примерной идентичности, поиск дополнительных локусов и перекрытия аннотированных CDS.
-2. **case**: анализ загруженного в кейсе файла `supplementary_file_unannotated_alignments.txt`, содержащего заранее выделенные Cactus-фрагменты для генов. Он **не является набором полных геномов**.
+**Scientific status:** exploratory prototype, not a validated causal classifier. Missing hits and missing annotation are *unknown*, not evidence of absence. The report contains no invented origin probabilities. A preliminary candidate requires independent validation with protein homology, synteny, ancestral ORF and gene trees.
 
-## Установка на Mac
+## Install and launch on macOS
 
 ```bash
-brew install minimap2
-python3 -m venv .venv
+cd ~/Desktop/evogene
+git switch main
+git pull --ff-only
+python3 -m venv .venv  # skip if .venv already exists
 source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+python -m pip install -r requirements.txt
+python -m streamlit run auto_app.py
 ```
 
-## Запуск по целым геномам
+Install **NCBI Datasets v2** and **minimap2** separately. The UI checks their versions on startup and locates binaries in PATH, `~/bin`, `/opt/homebrew/bin`, `/usr/local/bin`. It disables analysis until both are available.
+
+Use a *single gene* FASTA, not an unannotated whole-genome FASTA; choose its source species. Set 4–5 relatives for a richer comparison. A successful NCBI download does not ensure useful homology evidence. Protein-derived tests also require available annotations and detectable ORFs.
+
+## Output
+
+- **Mechanism evidence matrix:** status (`candidate`, `partial_signal`, `no_signal`, `not_assessed`), observed signals, caveats; **no forced percentages**.
+- **Conservation:** separate list of relatives with aligned DNA, annotated CDS overlap, and syntenic matches.
+- **Completeness:** which tests could not be carried out and why.
+- **JSON:** automatically saved to `results/auto_ncbi/<gene>.json` and available via browser download.
 
 ```bash
-python -m evogene.pipeline genomes \
-  --target-fasta /data/dmel_genome.fna.gz \
-  --target-gff /data/dmel_annotations.gff3.gz \
-  --gene FBgn0040343 \
-  --relative dsim=/data/dsim_genome.fna.gz:/data/dsim_annotations.gff3.gz \
-  --relative dyak=/data/dyak_genome.fna.gz:/data/dyak_annotations.gff3.gz \
-  --results results/genome_analysis
+python -m unittest discover -s tests -v
 ```
 
-GFF3 должен содержать запись `gene` с соответствующим ID. Сопоставление выполнено для ДНК всего генного интервала, а не для выделенного белка или отдельных экзонов. Сходный участок не означает ортологию, а отсутствие аннотированного CDS не доказывает некодирующее происхождение.
+Biological benchmark validation using verified independently curated de novo genes, retrocopies, duplicated genes, and negative controls **is still pending**. Synthetic unit tests are not proof of empirical accuracy.
 
-## Примеры по данным кейса
-
-```bash
-python -m evogene.pipeline case \
-  --alignment-file /path/to/supplementary_file_unannotated_alignments.txt \
-  --gene FBgn0262810 --gene FBgn0025616 \
-  --gene FBgn0029535 --gene FBgn0040343 \
-  --results results/case_examples
-```
-
-Результаты четырёх реальных примеров сохранены в `results/case_examples/`. Они основаны на *предварительно отобранных* фрагментах исходного файла, а не на автоматическом поиске по полным сборкам. Для полного комплекта JSON/CSV и тестов также доступен архив EvoGene_genome_analysis_v2.zip.
-
-Сборки из приложенной таблицы `supplementary_file_genome_assembly.csv` перечислены в `data/assembly_accessions.csv`. Это идентификаторы сборок, **не FASTA**.
-
-## Научные ограничения
-
-- Поиск сходства ДНК не определяет ортологию или механизм возникновения сам по себе.
-- Необходимо отдельно подтвердить синтению по фланкирующим генам, гомологию белков, дерево генов и предковое состояние ORF.
-- Отсутствие попадания может объясняться потерей гена, дивергенцией или качеством сборки.
-- Алгоритм не выдаёт калиброванную вероятность de novo или точный возраст.
-- Результаты для примеров — **наблюдения о сходстве последовательностей, а не доказанные механизмы эволюции**.
-
-Биоинформатическая основа: [LiZhaoLab/DrosophilaDenovoGene](https://github.com/LiZhaoLab/DrosophilaDenovoGene), стадии Cactus, ортологи, проверка скрытых гомологов. Код прототипа реализован отдельно.
+For details see `MECHANISM_V3.md`. Older modules and examples are retained for compatibility; `auto_app.py` and `evogene/ncbi_auto.py` are the current automatic pipeline.
