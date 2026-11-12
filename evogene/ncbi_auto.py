@@ -144,88 +144,142 @@ def target_gene(path,sequence='',chrom='',start=None,end=None,strand='+'):
     return dna,mode
 
 def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',start=None,end=None,strand='+',count=2,cache='genomes/ncbi_cache',progress=None):
-    if target_species not in PANEL:raise ValueError('Automatic panel not defined for '+target_species)
-    if not 1<=count<=5:raise ValueError('Relative count must be 1..5')
+    """Return evidence plus auditable, real-time pipeline events.
+
+    Every step records completed/skipped/failed, never invented progress.
+    """
+    events=[]
+    def emit(stage,state,detail='',species=None):
+        entry={'stage':stage,'state':state,'detail':str(detail)}
+        if species:entry['species']=species
+        events.append(entry)
+        if progress:progress(entry)
+
+    if target_species not in PANEL:
+        raise ValueError('Automatic panel not defined for '+target_species)
+    if not 1<=count<=5:
+        raise ValueError('Relative count must be 1..5')
     query,mode=target_gene(target_fasta,gene_sequence,chrom,start,end,strand)
-    selected=[];failures=[];hits={}
+    emit('input','completed',f'{len(query)} nt; input={mode}; target={target_species}')
+    selected=[]; failures=[]; hits={}; synteny_evidence={}
     for species in PANEL[target_species][:count]:
-        if progress:progress('NCBI: '+species)
         try:
+            emit('download','running','Поиск генома и GFF3',species)
             assembly=download(species,cache)
             selected.append(assembly)
-            if progress:progress('Aligning: '+species)
-            m=map_genome(query,assembly['fasta'],species)
-            annotate(m,assembly['gff'])
-            hits[species]=m
+            emit('download','completed',
+                 f"accession={assembly['accession']}; GFF3={'да' if assembly['gff'] else 'нет'}; cached={assembly.get('cached',False)}",species)
+            emit('dna_alignment','running','minimap2: ген → геном',species)
+            matches=map_genome(query,assembly['fasta'],species)
+            emit('dna_alignment','completed',f'Выравниваний: {len(matches)}',species)
+            emit('cds_annotation','running','Сопоставление выравниваний с CDS',species)
+            annotate(matches,assembly['gff'])
+            hits[species]=matches
+            emit('cds_annotation','completed',
+                 f"CDS-перекрытий: {sum(x['coding_overlap']=='overlaps_cds' for x in matches)}",species)
         except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,zipfile.BadZipFile) as exc:
             failures.append({'species':species,'error':str(exc)})
-    if not hits:raise RuntimeError('No species analyzed successfully: '+str(failures))
-    # Evidence screens: focal copies and conserved DNA flanks from focal reference.
-    # Failure to establish synteny must stay unknown, not become evidence of absence.
-    extra_target_copies=[]; synteny_evidence={}; origin_screen_errors=[]
-    parent_candidates=[]; retrocopy_evidence={}; focal_reference=None; main=None
+            emit('relative_analysis','failed',str(exc),species)
+    if not hits:
+        raise RuntimeError('No species analyzed successfully: '+str(failures))
+
+    extra_target_copies=[]; origin_screen_errors=[]; focal_reference=None; main=None
     protein_evidence={'status':'not_run','candidates':[]}
+    retrocopy_evidence={}
     try:
-        if progress:progress('NCBI: target reference for paralogy and synteny screens')
-        focal_assembly=download(target_species,cache)
-        focal_reference={'species':target_species,'accession':focal_assembly['accession'],
-                         'annotation_available':bool(focal_assembly['gff'])}
-        main,extra_target_copies=discover_target_locus(query,focal_assembly['fasta'])
-        # Looser self-matches can include a parent gene separated by introns.
-        # They are candidate homologs, never automatically confirmed parents.
-        if main is not None:
-            self_hits=map_genome(query,focal_assembly['fasta'],'target')
-            parent_candidates=[h for h in self_hits
-                if h['query_coverage']>=.25 and h['identity_approx']>=.60 and
-                not (h['chrom']==main['chrom'] and
-                     min(h['end'],main['end'])>max(h['start'],main['start']))][:30]
-        retrocopy_evidence=compare_retrocopy(main,parent_candidates,focal_assembly['gff'])
+        emit('target_reference','running','Поиск исходного референсного генома')
+        focal=download(target_species,cache)
+        focal_reference={'species':target_species,'accession':focal['accession'],
+                         'annotation_available':bool(focal['gff'])}
+        emit('target_reference','completed',
+             f"accession={focal['accession']}; GFF3={'да' if focal['gff'] else 'нет'}")
+        emit('target_mapping','running','Картирование гена на собственный геном')
+        self_hits=map_genome(query,focal['fasta'],'target')
+        main,extra_target_copies=discover_target_locus(
+            query,focal['fasta'],all_hits=self_hits)
+        emit('target_mapping','completed',
+             f"Совпадений: {len(self_hits)}; локус={'найден' if main else 'не найден'}; дополнительные копии={len(extra_target_copies)}")
+        if main is None:
+            origin_screen_errors.append('Target locus is not mapped to source reference; synteny and CDS structure unavailable')
+        parent_candidates=([hit for hit in self_hits
+            if hit['query_coverage']>=.25 and hit['identity_approx']>=.60 and
+            not (main and hit['chrom']==main['chrom'] and
+                 min(hit['end'],main['end'])>max(hit['start'],main['start']))][:30]
+            if main else [])
+        emit('gene_structure','running','Анализ CDS-экзонов исходного и похожих локусов')
+        retrocopy_evidence=compare_retrocopy(main,parent_candidates,focal['gff'])
+        target_cds=retrocopy_evidence.get('target_model',{})
+        emit('gene_structure','completed',
+             f"CDS={target_cds.get('status','unknown')}; сегментов={target_cds.get('exon_count')}; кандидаты={len(parent_candidates)}")
         try:
-            if progress:progress('Protein homology: focal reference proteins')
-            protein_path=ensure_proteins(focal_assembly,cache)
-            protein_evidence=protein_homology(query,protein_path,focal_assembly['gff'],main)
-        except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,
-                zipfile.BadZipFile) as exc:
+            emit('protein_homology','running','Белковый поиск, сначала аннотированный белок гена')
+            proteins=ensure_proteins(focal,cache)
+            protein_evidence=protein_homology(query,proteins,focal['gff'],main)
+            emit('protein_homology','completed',
+                 f"Источник={protein_evidence.get('query_source','unknown')}; найдено белковых совпадений={len(protein_evidence.get('candidates',[]))}")
+        except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,zipfile.BadZipFile) as exc:
             origin_screen_errors.append('Protein homology: '+str(exc))
             protein_evidence={'status':'failed','candidates':[],'error':str(exc)}
-        if main is None:
-            origin_screen_errors.append('Target locus cannot be mapped to focal reference; synteny unavailable')
-        else:
-            flanks=focal_flanks(focal_assembly['fasta'],main)
+            emit('protein_homology','failed',str(exc))
+        if main:
+            flanks=focal_flanks(focal['fasta'],main)
+            if not flanks:
+                emit('synteny','skipped','Не удалось выделить два фланкирующих участка')
             for assembly in selected:
-                relative=assembly['species']
-                if relative not in hits:continue
+                species=assembly['species']
+                if species not in hits:continue
                 try:
-                    if progress:progress('Synteny anchors: '+relative)
-                    synteny_evidence[relative]=assess_synteny(
-                        flanks,hits[relative],assembly['fasta'],relative)
+                    emit('synteny','running','Сравнение левого и правого флангов',species)
+                    synteny_evidence[species]=assess_synteny(
+                        flanks,hits[species],assembly['fasta'],species)
+                    emit('synteny','completed',
+                         str(synteny_evidence[species].get('status'))+': '+
+                         str(synteny_evidence[species].get('locus_status')),species)
                 except (OSError,RuntimeError,ValueError,subprocess.TimeoutExpired) as exc:
-                    origin_screen_errors.append(relative+': '+str(exc))
+                    origin_screen_errors.append('Synteny '+species+': '+str(exc))
+                    emit('synteny','failed',str(exc),species)
+        else:
+            emit('synteny','skipped','Не найден локус в исходном геноме')
     except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,zipfile.BadZipFile) as exc:
         origin_screen_errors.append('Target reference: '+str(exc))
-    valid={s:[h for h in hs if h['query_coverage']>=.5 and h['identity_approx']>=.65] for s,hs in hits.items()}
+        emit('target_reference','failed',str(exc))
+
+    valid={species:[h for h in hs if h['query_coverage']>=.5 and
+                   h['identity_approx']>=.65] for species,hs in hits.items()}
     matching=[s for s,hs in valid.items() if hs]
-    coding=[s for s,hs in valid.items() if any(h['coding_overlap']=='overlaps_cds' for h in hs)]
+    coding=[s for s,hs in valid.items()
+            if any(h['coding_overlap']=='overlaps_cds' for h in hs)]
     category=('conserved_coding_candidate' if len(coding)>=2 else
-              'conserved_dna_locus_origin_unresolved' if matching else 'unresolved_no_detectable_hit')
-    result={'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
-            'hypothesis':category,'matching_species':matching,'coding_species':coding,
-            'ncbi_assemblies':selected,'download_or_analysis_errors':failures,'relatives':hits,
-            'extra_target_copies':extra_target_copies,'synteny_evidence':synteny_evidence,
-            'origin_screen_errors':origin_screen_errors,
-            'focal_reference':focal_reference,'target_locus':main,
-            'retrocopy_evidence':retrocopy_evidence,
-            'protein_evidence':protein_evidence,
-            'limitations':['DNA mapping alone does not prove orthology, synteny or de novo origin.',
-              'No CDS overlap is not proof of noncoding ancestry.',
-              'No mapping hit is not proof of absence.',
-              'Relative panel is curated, not inferred phylogenetically.']}
-    result['species_status']=[
-        {'species':species,'status':('matched' if species in matching else 'no_alignment'),
-         'alignment_count':len(hits[species]),'passing_count':len(valid[species])}
-        for species in hits
-    ] + [{'species':failure['species'],'status':'failed','error':failure['error']}
-         for failure in failures]
-    result['query_length_nt']=len(query)
-    result['mechanism_report'] = classify(result)
-    return result
+              'conserved_dna_locus_origin_unresolved' if matching else
+              'unresolved_no_detectable_hit')
+    report={
+        'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
+        'hypothesis':category,'query_length_nt':len(query),
+        'matching_species':matching,'coding_species':coding,'ncbi_assemblies':selected,
+        'download_or_analysis_errors':failures,'relatives':hits,
+        'extra_target_copies':extra_target_copies,'synteny_evidence':synteny_evidence,
+        'origin_screen_errors':origin_screen_errors,'focal_reference':focal_reference,
+        'target_locus':main,'retrocopy_evidence':retrocopy_evidence,
+        'protein_evidence':protein_evidence,
+        'limitations':['No mapping hit is not proof of gene absence.',
+                       'Noncoding GFF3 annotations do not establish ancestral noncoding status.',
+                       'Protein hits and synteny are preliminary, not a proven origin mechanism.',
+                       'Evidence strengths are not calibrated probabilities.'],
+        'species_status':([
+            {'species':species,'status':('matched' if species in matching else 'no_alignment'),
+             'alignment_count':len(hits[species]),'passing_count':len(valid[species])}
+            for species in hits
+        ]+[
+            {'species':f['species'],'status':'failed','error':f['error']}
+            for f in failures
+        ]),
+    }
+    emit('mechanism_tests','running','Независимые тесты: de novo, дупликация, ретропозиция, транспозиция, слияние')
+    report['mechanism_report']=classify(report)
+    for test in report['mechanism_report']['tests']:
+        emit('test_'+test['mechanism'],'completed',
+             f"{test['status']}; сигналов={test['signal_count']}")
+    emit('mechanism_tests','completed',
+         f"Кандидатов: {len(report['mechanism_report']['candidate_mechanisms'])}; непроверенных: {len(report['mechanism_report']['completeness']['not_assessed'])}")
+    report['pipeline_events']=events
+    return report

@@ -78,6 +78,7 @@ def map_genome(query,reference,species):
     return sorted(hits,key=lambda h:h['identity_approx']*h['query_coverage'],reverse=True)
 
 def annotate(hits,gff_path):
+    if not hits:return
     if not gff_path:
         for hit in hits:hit['coding_overlap']='unknown_no_gff'
         return

@@ -4,9 +4,11 @@ from .genomes import fasta, map_genome
 def overlapping(a,b):
     return a['chrom']==b['chrom'] and min(a['end'],b['end'])>max(a['start'],b['start'])
 
-def discover_target_locus(query,genome):
-    matches=[x for x in map_genome(query,genome,'target') if
-             x.get('query_coverage',0)>=.7 and x.get('identity_approx',0)>=.8]
+def discover_target_locus(query,genome,all_hits=None):
+    # Reuse reference mapping for every mechanism: a single minimap2 call.
+    candidates=all_hits if all_hits is not None else map_genome(query,genome,'target')
+    matches=[x for x in candidates if
+             x.get('query_coverage',0)>=.5 and x.get('identity_approx',0)>=.7]
     if not matches:return None,[]
     main=matches[0]; extras=[]
     for x in matches[1:]:

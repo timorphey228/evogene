@@ -39,16 +39,64 @@ if st.button('Скачать геномы NCBI и запустить анали�
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/('target'+''.join(Path(f.name).suffixes))
             path.write_bytes(f.getvalue())
-            status=st.empty()
-            with st.spinner('NCBI download and minimap2...'):
+            with st.status('Анализ генов: выполняются реальные этапы',expanded=True) as live:
+                def update_progress(event):
+                    if isinstance(event,str):
+                        st.write(event)
+                        return
+                    icons={'running':'⏳','completed':'✅','failed':'❌','skipped':'⚪'}
+                    label=(event.get('species')+' — ') if event.get('species') else ''
+                    if event['state']!='running':
+                        st.write(icons.get(event['state'],'•')+' '+label+
+                                 event['stage']+': '+event.get('detail',''))
                 try:
-                    st.session_state['auto_report']=analyze(path,species,gene,gene_sequence=dna,
+                    st.session_state['auto_report']=analyze(
+                        path,species,gene,gene_sequence=dna,
                         chrom=chrom,start=start,end=end,strand=strand,count=count,
-                        progress=lambda message:status.info(message))
-                except Exception as exc:st.error(str(exc))
-            status.empty()
+                        progress=update_progress)
+                    live.update(label='Анализ завершён — смотрите результаты проверок',
+                                state='complete',expanded=False)
+                except Exception as exc:
+                    live.update(label='Анализ завершился с ошибкой',state='error',
+                                expanded=True)
+                    st.error(str(exc))
 if 'auto_report' in st.session_state:
     r=st.session_state['auto_report']
+    st.subheader('Как проходил анализ')
+    trace=r.get('pipeline_events',[])
+    if trace:
+        final={}
+        for event in trace:
+            key=(event.get('stage'),event.get('species',''))
+            final[key]=event
+        states=list(final.values())
+        done=sum(x['state']=='completed' for x in states)
+        skipped=sum(x['state']=='skipped' for x in states)
+        failed=sum(x['state']=='failed' for x in states)
+        c1,c2,c3=st.columns(3)
+        c1.metric('Этапов завершено',done)
+        c2.metric('Пропущено',skipped)
+        c3.metric('Ошибок',failed)
+        st.dataframe([{'Этап':e['stage'],'Вид':e.get('species','—'),
+                       'Результат':{'completed':'✅ Выполнено','skipped':'⚪ Пропущено',
+                                    'failed':'❌ Ошибка','running':'⏳ Выполняется'}.get(e['state'],e['state']),
+                       'Что обнаружено':e['detail']} for e in states],
+                     use_container_width=True,hide_index=True)
+        with st.expander('Полная последовательность событий анализа'):
+            st.dataframe(trace,use_container_width=True,hide_index=True)
+    else:
+        st.info('Для визуализации этапов выполните новый анализ. Старые отчёты не содержат журнала.')
+    st.subheader('Результаты проверок механизмов')
+    if r.get('mechanism_report'):
+        cols=st.columns(5)
+        for column,item in zip(cols,r['mechanism_report']['tests']):
+            with column:
+                symbol={'candidate':'✅','partial_signal':'🔎',
+                        'no_signal':'➖','not_assessed':'⚪'}.get(item['status'],'•')
+                st.markdown(f"**{item['label']}**")
+                st.caption(symbol+' '+item['status'])
+                st.caption('Признаков: '+str(item['signal_count']))
+    st.divider()
     st.subheader('Проверка всех выбранных видов')
     if r.get('species_status'):
         labels={'matched':'Найдено сходство','no_alignment':'Выравниваний нет','failed':'Ошибка обработки'}
@@ -93,6 +141,9 @@ if 'auto_report' in st.session_state:
         protein=r.get('protein_evidence') or {}
         with st.expander('Белковые гомологи и предполагаемые родительские гены'):
             st.write('Результат белкового поиска:',protein.get('status','not_run'))
+            st.write('Источник белка:',protein.get('query_source','unknown'))
+            st.write('Аннотированные белки изучаемого гена:',
+                     protein.get('annotated_target_protein_ids',[]))
             st.write('Длины ORF (аминокислоты):',protein.get('orf_lengths_aa',[]))
             st.write('Кандидаты белковых гомологов:',protein.get('candidates',[])[:15])
             st.caption('Это предварительный локальный белковый скрининг, не BLASTP.')

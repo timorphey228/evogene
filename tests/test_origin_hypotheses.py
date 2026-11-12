@@ -78,6 +78,11 @@ class PipelineSummaryIntegrationTests(unittest.TestCase):
             f=Path(folder)/'gene.fasta'
             f.write_text('>gene'+chr(10)+'ATG'*110+chr(10))
             report=analyze(f,'Drosophila simulans','test_gene',count=2)
+        self.assertIn('pipeline_events',report)
+        self.assertTrue(any(e['stage']=='mechanism_tests' and e['state']=='completed'
+                            for e in report['pipeline_events']))
+        self.assertTrue(any(e['stage']=='protein_homology'
+                            for e in report['pipeline_events']))
         self.assertIn('synteny_evidence',report)
         m=report['mechanism_report']
         duplication=next(x for x in m['tests'] if x['mechanism']=='dna_duplication')

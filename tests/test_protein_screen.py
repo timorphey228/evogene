@@ -41,3 +41,25 @@ class ProteinHomologyTests(unittest.TestCase):
 
     def test_no_protein_access(self):
         self.assertFalse(query_orfs('ATGAAATAG'))
+
+    def test_intronic_genomic_sequence_uses_annotated_protein(self):
+        # Genomic DNA intentionally has no long ORF, but the annotated
+        # target protein has a close relative with different exon structure.
+        dna=('ATGTAA'*100)
+        self.assertFalse(query_orfs(dna))
+        with TemporaryDirectory() as temp:
+            folder=Path(temp)
+            (folder/'proteins.faa').write_text(
+                '>XP_child.1\n'+'M'+'A'*85+'\n'
+                '>XP_parent.1\n'+'M'+'A'*83+'GG\n')
+            (folder/'genes.gff3').write_text(
+                'chr2\tX\tCDS\t101\t190\t.\t+\t0\tParent=rna-child;protein_id=XP_child.1\n'
+                'chrX\tX\tCDS\t1001\t1080\t.\t+\t0\tParent=rna-parent;protein_id=XP_parent.1\n'
+                'chrX\tX\tCDS\t1201\t1280\t.\t+\t0\tParent=rna-parent;protein_id=XP_parent.1\n')
+            evidence=protein_homology(
+                dna,folder/'proteins.faa',folder/'genes.gff3',
+                {'chrom':'chr2','start':100,'end':190})
+        self.assertEqual(evidence['query_source'],'annotated_cds')
+        parents=[item for item in evidence['candidates'] if not item['overlaps_target']]
+        self.assertTrue(parents)
+        self.assertEqual(parents[0]['gene_model']['cds_exons'],2)
