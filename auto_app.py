@@ -8,6 +8,10 @@ from evogene.analysis_notes import render_analysis_annotations
 from evogene.visualization import render_report_visualizations
 st.set_page_config(page_title='EvoGene Auto NCBI',layout='wide')
 st.title('EvoGene — автоматическая загрузка геномов NCBI')
+st.info('Есть supplementary_file_unannotated_alignments.fasta (~54 МБ)? '
+        'Не загружайте его как FASTA одного гена. '
+        'Для этого файла откройте специальный режим: '
+        'python -m streamlit run app.py → «Данные статьи Peng & Zhao».')
 st.caption('Вы загружаете только свой FASTA. Сравнительные геномы и доступные GFF3 скачиваются автоматически.')
 st.warning('FASTA полного генома не содержит названия и координат генов. Нужно ввести последовательность гена либо координаты. Это не доказательство de novo.')
 st.subheader('Проверка инструментов на этом Mac')
