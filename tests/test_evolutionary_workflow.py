@@ -45,7 +45,7 @@ class TreeTests(unittest.TestCase):
         def fake_run(cmd, **kwargs):
             if "mafft" in cmd[0]:
                 return SimpleNamespace(returncode=0,stderr="MAFFT successful",
-                    stdout="".join(f">{name}\\n{seq}\\n" for name,seq in rows.items()))
+                    stdout="".join(f">{name}\n{seq}\n" for name,seq in rows.items()))
             prefix=cmd[cmd.index("--prefix")+1]
             Path(prefix+".treefile").write_text(
                 "((a:0.01,b:0.02)99/96:0.03,(c:0.04,d:0.05)98/94:0.06);")
