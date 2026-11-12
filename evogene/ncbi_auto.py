@@ -6,7 +6,6 @@ FASTA assemblies do not encode gene identifiers. Provide a gene sequence,
 import json, re, shutil, subprocess, zipfile
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
-from .origin_tests import distribute
 from .mechanism_v3 import classify
 from .gene_models import compare_retrocopy
 from .protein_screen import protein_homology
@@ -228,6 +227,5 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     ] + [{'species':failure['species'],'status':'failed','error':failure['error']}
          for failure in failures]
     result['query_length_nt']=len(query)
-    result['origin_support'] = distribute(result)  # Deprecated, retained for legacy integrations
     result['mechanism_report'] = classify(result)
     return result

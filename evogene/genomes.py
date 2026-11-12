@@ -2,7 +2,6 @@
 from dataclasses import dataclass,asdict
 import gzip, subprocess, shutil, tempfile
 from pathlib import Path
-from .origin_tests import distribute
 from .mechanism_v3 import classify
 from .gene_models import compare_retrocopy
 from .tools import find_tool
@@ -136,6 +135,5 @@ def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
                            'No CDS overlap is not proof of noncoding ancestry.',
                            'No hit is not proof of absence or de novo origin.',
                            'Gene tree, paralog search and protein analyses remain necessary.']}
-    result['origin_support'] = distribute(result)  # Deprecated
     result['mechanism_report'] = classify(result)
     return result

@@ -79,7 +79,8 @@ class PipelineSummaryIntegrationTests(unittest.TestCase):
             f.write_text('>gene'+chr(10)+'ATG'*110+chr(10))
             report=analyze(f,'Drosophila simulans','test_gene',count=2)
         self.assertIn('synteny_evidence',report)
-        self.assertIn('duplication',report['origin_support']['tests'])
-        self.assertGreater(report['origin_support']['tests']['duplication']['support_points'],0)
+        m=report['mechanism_report']
+        duplication=next(x for x in m['tests'] if x['mechanism']=='dna_duplication')
+        self.assertGreater(duplication['evidence_weight'],0)
         self.assertEqual(round(sum(x['support_percent']
-                                 for x in report['origin_support']['options']),1),100.0)
+                                 for x in m['options']),1),100.0)

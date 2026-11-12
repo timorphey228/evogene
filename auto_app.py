@@ -101,7 +101,7 @@ if 'auto_report' in st.session_state:
             st.warning('Некоторые проверки не завершены: '+str(r['origin_screen_errors']))
     else:
         st.info('Отчёт нового классификатора ещё не создан. Перезапусти анализ на этой версии.')
-    st.subheader('Технические результаты: '+r['hypothesis'])
+    st.subheader('Техническая категория межвидового поиска: '+r['hypothesis'])
     st.write('NCBI assembly accessions:',[(x['species'],x['accession']) for x in r['ncbi_assemblies']])
     st.write('Matching species:',r['matching_species'])
     st.write('Download errors:',r['download_or_analysis_errors'])
