@@ -5,6 +5,7 @@ FASTA assemblies do not encode gene identifiers. Provide a gene sequence,
 """
 import json, re, shutil, subprocess, zipfile
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
 from .mechanism_v3 import classify
@@ -94,6 +95,7 @@ def command(args,timeout=180):
     if p.returncode:raise RuntimeError('NCBI datasets: '+p.stderr[-600:])
     return p.stdout
 
+@lru_cache(maxsize=64)
 def find_assembly(species):
     def valid(s):
         r=json.loads(s).get('reports',[])
