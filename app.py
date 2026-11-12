@@ -25,6 +25,7 @@ mode = st.radio("Источник данных", [
 if st.session_state.get("evo_active_mode") != mode:
     st.session_state.pop("evo_result", None)
     st.session_state.pop("case_export", None)
+    st.session_state.pop("evo_case_export_gene", None)
     st.session_state.pop("evo_batch", None)
     st.session_state["evo_active_mode"] = mode
 
@@ -150,6 +151,7 @@ else:
             if st.session_state.get("evo_case_selection") != selection_id:
                 st.session_state.pop("evo_result", None)
                 st.session_state.pop("case_export", None)
+                st.session_state.pop("evo_case_export_gene", None)
                 st.session_state.pop("evo_batch", None)
                 st.session_state["evo_case_selection"] = selection_id
             st.caption("Raw = геномная ДНК; Spaln/Genewise = предсказания "
@@ -177,14 +179,20 @@ else:
                                 temp.name, first, method,
                                 species=set(chosen_species) | {"dmel"},
                             )
+                            st.session_state["evo_case_export_gene"] = first
                         else:
                             st.session_state.pop("evo_result", None)
                             st.session_state.pop("case_export", None)
+                            st.session_state.pop("evo_case_export_gene", None)
                     except (OSError, ValueError, UnicodeError) as exc:
                         st.error(f"Не удалось обработать файл: {exc}")
         except (OSError, ValueError, UnicodeError) as exc:
             st.error(f"Не удалось индексировать файл: {exc}")
     else:
+        st.session_state.pop("evo_result", None)
+        st.session_state.pop("evo_batch", None)
+        st.session_state.pop("case_export", None)
+        st.session_state.pop("evo_case_export_gene", None)
         st.info("Загрузите файл из исследования; встроенная демо-таблица "
                 "не заменяет реальных последовательностей.")
 
@@ -237,6 +245,22 @@ if batch and mode.startswith("Данные статьи"):
                    + batch["source"]["sha256"] + " | метод: "
                    + batch["source"]["method"])
         st.session_state["evo_result"] = batch["raw_reports"][selected_gene]
+        if st.session_state.get("evo_case_export_gene") != selected_gene:
+            if file is not None:
+                with tempfile.NamedTemporaryFile(suffix=".fasta") as temp:
+                    temp.write(file.getvalue())
+                    temp.flush()
+                    try:
+                        st.session_state["case_export"] = export_gene_fasta(
+                            temp.name, selected_gene, batch["source"]["method"],
+                            species=set(batch["source"].get("requested_species") or []) | {"dmel"}
+                            if batch["source"].get("requested_species") is not None else None,
+                        )
+                        st.session_state["evo_case_export_gene"] = selected_gene
+                    except (OSError, ValueError, UnicodeError) as exc:
+                        st.warning("Экспорт FASTA выбранного гена не удался: " + str(exc))
+                        st.session_state.pop("case_export", None)
+                        st.session_state.pop("evo_case_export_gene", None)
     st.download_button(
         "Скачать полный научный отчёт JSON по всем генам",
         data=json.dumps(batch, ensure_ascii=False, indent=2),
