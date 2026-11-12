@@ -197,6 +197,26 @@ def render_report_visualizations(report):
             ).properties(height=max(150, 34 * len({h["species"] for h in hits}))).interactive()
             st.altair_chart(chart, use_container_width=True)
             st.dataframe(hits, use_container_width=True, hide_index=True)
+        elif report.get("hits"):
+            st.caption("Предварительно отобранные Cactus-фрагменты: локальная "
+                       "идентичность и покрытие. Это не независимый поиск "
+                       "гомологов в целых геномах.")
+            rows = [{
+                "species": hit.get("species_abbr", "?"),
+                "identity": round(100 * float(hit.get("identity_aligned", 0)), 2),
+                "coverage": round(100 * float(hit.get("query_coverage", 0)), 2),
+                "kind": hit.get("header_kind", "unknown"),
+                "header": hit.get("header", ""),
+            } for hit in report["hits"]]
+            chart = alt.Chart(alt.Data(values=rows)).mark_circle(size=95).encode(
+                x=alt.X("coverage:Q", title="Покрытие запроса, %", scale=alt.Scale(domain=[0, 100])),
+                y=alt.Y("identity:Q", title="Идентичность выровненных позиций, %",
+                        scale=alt.Scale(domain=[0, 100])),
+                color=alt.Color("kind:N", title="Тип Cactus-записи"),
+                tooltip=["species:N", "header:N", "coverage:Q", "identity:Q"],
+            ).properties(height=300).interactive()
+            st.altair_chart(chart, use_container_width=True)
+            st.dataframe(rows, use_container_width=True, hide_index=True)
         else:
             st.info("Блоков выравнивания нет или формат не содержит координат запроса.")
         st.markdown("**Посимвольное множественное выравнивание (отдельный файл)**")
