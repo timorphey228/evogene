@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 def find_tool(name):
-    if name not in ('datasets', 'minimap2'):
+    if name not in ('datasets', 'minimap2', 'mafft', 'iqtree2', 'iqtree'):
         raise ValueError('Unsupported executable')
     candidates = [shutil.which(name)]
     home = Path.home()
