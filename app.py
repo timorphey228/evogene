@@ -21,6 +21,10 @@ mode = st.radio("Источник данных", [
     "Локальные геномы FASTA + GFF3",
     "Данные статьи Peng & Zhao: Cactus / Spaln / Genewise",
 ])
+if st.session_state.get("evo_active_mode") != mode:
+    st.session_state.pop("evo_result", None)
+    st.session_state.pop("case_export", None)
+    st.session_state["evo_active_mode"] = mode
 
 
 def save_upload(upload, folder):
@@ -131,6 +135,12 @@ else:
                 help="Фильтр распространяется на таблицу совпадений и FASTA-экспорт. "
                      "Полнота по всем видам отображается отдельно.",
             )
+            from hashlib import sha256
+            selection_id = (sha256(raw).hexdigest(), gene, method, tuple(chosen_species))
+            if st.session_state.get("evo_case_selection") != selection_id:
+                st.session_state.pop("evo_result", None)
+                st.session_state.pop("case_export", None)
+                st.session_state["evo_case_selection"] = selection_id
             st.caption("Raw = геномная ДНК; Spaln/Genewise = предсказания "
                        "сплайсированных кодирующих фрагментов. Score/shift — "
                        "авторская метаинформация; без опубликованной калибровки "
