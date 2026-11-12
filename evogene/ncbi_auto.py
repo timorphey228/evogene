@@ -232,9 +232,11 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
                     emit('synteny','running','Сравнение левого и правого флангов',species)
                     synteny_evidence[species]=assess_synteny(
                         flanks,hits[species],assembly['fasta'],species)
-                    emit('synteny','completed',
-                         str(synteny_evidence[species].get('status'))+': '+
-                         str(synteny_evidence[species].get('locus_status')),species)
+                    detail=(str(synteny_evidence[species].get('status'))+': '+
+                            str(synteny_evidence[species].get('locus_status')))
+                    rescued=synteny_evidence[species].get('local_rescue')
+                    if rescued:detail+='; локальный поиск: '+rescued['status']
+                    emit('synteny','completed',detail,species)
                 except (OSError,RuntimeError,ValueError,subprocess.TimeoutExpired) as exc:
                     origin_screen_errors.append('Synteny '+species+': '+str(exc))
                     emit('synteny','failed',str(exc),species)

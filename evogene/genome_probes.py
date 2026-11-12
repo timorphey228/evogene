@@ -24,7 +24,7 @@ def focal_flanks(genome,locus,size=4000):
             return (left,right) if len(left)>=750 and len(right)>=750 else None
     return None
 
-def assess_synteny(flanks,hits,relative_assembly,species):
+def assess_synteny(flanks,hits,relative_assembly,species,query=None,gff_path=None):
     if not flanks:return {'status':'unknown_flanks_unavailable','locus_status':'unknown'}
     left=[h for h in map_genome(flanks[0],relative_assembly,species)
           if h['query_coverage']>=.55 and h['identity_approx']>=.65]
@@ -48,6 +48,14 @@ def assess_synteny(flanks,hits,relative_assembly,species):
             h['identity_approx']>=.65]
     elsewhere=[h for h in hits if h not in inside and
                h['query_coverage']>=.5 and h['identity_approx']>=.65]
+    rescue=None
+    if not inside and query:
+        from .local_rescue import rescue_in_interval
+        rescue=rescue_in_interval(query,relative_assembly,a['chrom'],low,high,gff_path)
+        if rescue['status']=='candidate_local_homology':
+            # A short hit rescued inside a syntenic interval is much weaker
+            # evidence than a genome-wide minimap2 hit; record it explicitly.
+            inside=[rescue['hit']]
     if inside:
         if any(h.get('coding_overlap')=='overlaps_cds' for h in inside):
             locus='homolog_overlaps_cds'
@@ -56,6 +64,8 @@ def assess_synteny(flanks,hits,relative_assembly,species):
         else:locus='homolog_annotation_unknown'
     elif elsewhere:locus='homolog_elsewhere'
     else:locus='no_detectable_gene_hit'
-    return {'status':'flanks_collinear','locus_status':locus,
+    result={'status':'flanks_collinear','locus_status':locus,
             'chrom':a['chrom'],'interval_0based':[low,high],
             'homologs_at_syntenic_locus':len(inside),'homologs_elsewhere':len(elsewhere)}
+    if rescue:result['local_rescue']=rescue
+    return result

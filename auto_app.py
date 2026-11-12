@@ -152,6 +152,10 @@ if 'auto_report' in st.session_state:
             st.write('Исследуемый ген:',retro.get('target_model',{}))
             st.write('Кандидаты родительских локусов:',retro.get('parent_candidates',[]))
             st.write('Научные ограничения:',retro.get('limitations',[]))
+        with st.expander('Синтения и локальный поиск коротких гомологов'):
+            for rel,evidence in r.get('synteny_evidence',{}).items():
+                st.write('**'+rel+'**')
+                st.json(evidence)
         if r.get('origin_screen_errors'):
             st.warning('Некоторые проверки не завершены: '+str(r['origin_screen_errors']))
     else:
