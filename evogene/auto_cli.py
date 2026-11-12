@@ -10,11 +10,15 @@ p.add_argument('--chrom',default='')
 p.add_argument('--start',type=int)
 p.add_argument('--end',type=int)
 p.add_argument('--strand',default='+',choices=['+','-'])
-p.add_argument('--count',type=int,default=2)
+p.add_argument('--count',type=int,default=2,
+               help='Backward-compatible first N relatives, now up to 19')
+p.add_argument('--relative',action='append',dest='relatives',
+               help='Repeat with exact scientific species names from PANEL; overrides --count')
 p.add_argument('--results',default='results/auto_ncbi')
 a=p.parse_args()
 r=analyze(a.target_fasta,a.species,a.gene_id,gene_sequence=a.gene_sequence,
           chrom=a.chrom,start=a.start,end=a.end,strand=a.strand,count=a.count,
+          relative_species=a.relatives,
           progress=print)
 d=Path(a.results);d.mkdir(parents=True,exist_ok=True)
 p=d/(a.gene_id+'.json');p.write_text(json.dumps(r,indent=2,ensure_ascii=False))
