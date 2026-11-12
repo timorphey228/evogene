@@ -5,7 +5,20 @@ FASTA assemblies do not encode gene identifiers. Provide a gene sequence,
 """
 import json, re, shutil, subprocess, zipfile
 from pathlib import Path
-from .genomes import fasta_iter, get_contig, reverse_complement, map_with_minimap, annotate_mappings
+from .genomes import fasta, map_genome, annotate
+
+def fasta_iter(path):
+    return fasta(path)
+
+def get_contig(path, name):
+    for header, sequence in fasta(path):
+        if header == name:
+            return sequence
+    raise ValueError(f'Contig {name!r} not found in {path}')
+
+def reverse_complement(sequence):
+    return sequence.upper().translate(str.maketrans('ACGTN', 'TGCAN'))[::-1]
+
 
 PANEL={
 'Drosophila melanogaster':['Drosophila simulans','Drosophila sechellia','Drosophila yakuba','Drosophila erecta','Drosophila ananassae'],
@@ -102,15 +115,15 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
             assembly=download(species,cache)
             selected.append(assembly)
             if progress:progress('Aligning: '+species)
-            m=map_with_minimap(query,assembly['fasta'],species)
-            annotate_mappings(m,assembly['gff'])
-            hits[species]=[x.as_dict() for x in m]
+            m=map_genome(query,assembly['fasta'],species)
+            annotate(m,assembly['gff'])
+            hits[species]=m
         except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,zipfile.BadZipFile) as exc:
             failures.append({'species':species,'error':str(exc)})
-    if not selected:raise RuntimeError('No species analyzed successfully: '+str(failures))
+    if not hits:raise RuntimeError('No species analyzed successfully: '+str(failures))
     valid={s:[h for h in hs if h['query_coverage']>=.5 and h['identity_approx']>=.65] for s,hs in hits.items()}
     matching=[s for s,hs in valid.items() if hs]
-    coding=[s for s,hs in valid.items() if any(h['annotation']=='overlaps_annotated_cds' for h in hs)]
+    coding=[s for s,hs in valid.items() if any(h['coding_overlap']=='overlaps_cds' for h in hs)]
     category=('conserved_coding_candidate' if len(coding)>=2 else
               'conserved_dna_locus_origin_unresolved' if matching else 'unresolved_no_detectable_hit')
     return {'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
