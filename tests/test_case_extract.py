@@ -158,8 +158,8 @@ class MultiGeneScientificReportTests(unittest.TestCase):
 
 class PanelTests(unittest.TestCase):
     def test_species_panel_not_limited_to_five(self):
-        self.assertEqual(len(SPECIES_BY_CODE), 20)
-        self.assertEqual(len(PANEL["Drosophila melanogaster"]), 19)
+        self.assertEqual(len(SPECIES_BY_CODE), 21)
+        self.assertEqual(len(PANEL["Drosophila melanogaster"]), 20)
         self.assertIn("Bactrocera dorsalis", PANEL["Drosophila melanogaster"])
         self.assertNotIn("Drosophila melanogaster", PANEL["Drosophila melanogaster"])
 
