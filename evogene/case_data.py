@@ -267,3 +267,51 @@ def export_gene_fasta(path, gene_id, method="raw", species=None):
     if not lines:
         raise ValueError("No sequences selected")
     return "\n".join(lines) + "\n"
+
+
+def analyze_many(path, gene_ids, method="raw", selected_species=None):
+    """Bounded-I/O batch: three full scans, then analyze small per-gene extracts.
+
+    Retains the exact three published section boundaries and headers. Avoids
+    O(number_of_genes * 53MB) repeated input scans for large selections.
+    Returns (reports_by_id, per_gene_errors) without hiding partial failures.
+    """
+    from tempfile import TemporaryDirectory
+
+    if method not in METHODS:
+        raise ValueError("Unknown method")
+    ids = list(dict.fromkeys(gene_ids))
+    wanted = set(ids)
+    # At most one selected group's sequences are retained per gene+method.
+    selected = {g: {} for g in ids}
+    for current_method in METHODS:
+        for section_name, rows in sections(path, current_method):
+            gene_id = section_name.rsplit("_", 1)[-1]
+            if gene_id in wanted:
+                selected[gene_id][current_method] = (section_name, rows)
+    outputs, errors = {}, {}
+    with TemporaryDirectory(prefix="evogene_case_batch_") as tmp:
+        for gene_id in ids:
+            if method not in selected[gene_id]:
+                errors[gene_id] = "Gene not found in " + method + ": " + gene_id
+                continue
+            extracted = Path(tmp) / (gene_id + ".fasta")
+            with extracted.open("w", encoding="utf8") as stream:
+                for section_idx, (key, (prefix, _)) in enumerate(METHODS.items(), 1):
+                    item = selected[gene_id].get(key)
+                    if not item:
+                        continue
+                    section_name, rows = item
+                    stream.write(f"Section {section_idx}. Extracted {key}\n")
+                    stream.write(prefix + section_name + "\n")
+                    for header, dna in rows:
+                        stream.write(">" + header + "\n")
+                        stream.write(dna + "\n")
+            try:
+                outputs[gene_id] = analyze(
+                    extracted, gene_id, method=method,
+                    selected_species=selected_species,
+                )
+            except (OSError, ValueError, UnicodeError) as exc:
+                errors[gene_id] = str(exc)
+    return outputs, errors
