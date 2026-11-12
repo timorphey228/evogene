@@ -168,7 +168,7 @@ def method_summary(path, gene_id):
             "empty_sequences": len(records) - len(seq_lengths),
             "shift_yes": sum((item["shift_flag"] or "").lower() == "yes" for item in genomic),
             "shift_unknown": sum(item["shift_flag"] is None for item in genomic),
-            "median_nt": int(median(seq_lengths)) if seq_lengths else None,
+            "median_nt": median(seq_lengths) if seq_lengths else None,
         })
     return result
 
