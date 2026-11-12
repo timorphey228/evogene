@@ -4,6 +4,7 @@ FASTA assemblies do not encode gene identifiers. Provide a gene sequence,
 1-based coordinates, or a single-record gene FASTA as the input.
 """
 import json, re, shutil, subprocess, zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
 from .mechanism_v3 import classify
@@ -50,6 +51,7 @@ SPECIES_BY_CODE = {
     "sleb": "Scaptodrosophila lebanonensis",
     "blat": "Bactrocera latifrons",
     "bdor": "Bactrocera dorsalis",
+    "mdom": "Musca domestica",
 }
 SPECIES_ORDER = tuple(SPECIES_BY_CODE.values())
 PANEL = {
@@ -57,7 +59,32 @@ PANEL = {
     for species in SPECIES_ORDER
 }
 
-CASE={'Drosophila simulans':'GCF_000754195.2','Drosophila sechellia':'GCF_004382195.1','Drosophila yakuba':'GCF_000005975.2','Drosophila erecta':'GCF_003286155.1','Drosophila ananassae':'GCF_003285975.2'}
+# Pinned assembly versions supplied with Peng & Zhao (2024); the focal
+# D. melanogaster FlyBase r6.36 release is NOT an NCBI accession.
+REFERENCE_ASSEMBLIES = {
+    "Drosophila melanogaster": "FlyBase r6.36",
+    "Drosophila simulans": "GCF_000754195.2",
+    "Drosophila sechellia": "GCF_004382195.1",
+    "Drosophila yakuba": "GCF_000005975.2",
+    "Drosophila erecta": "GCF_003286155.1",
+    "Drosophila ficusphila": "GCF_000220665.1",
+    "Drosophila rhopaloa": "GCF_000236305.1",
+    "Drosophila elegans": "GCF_000224195.1",
+    "Drosophila eugracilis": "GCF_000236325.1",
+    "Drosophila biarmipes": "GCF_000233415.1",
+    "Drosophila takahashii": "GCF_000224235.1",
+    "Drosophila kikkawai": "GCF_000224215.1",
+    "Drosophila ananassae": "GCF_003285975.2",
+    "Drosophila miranda": "GCF_003369915.1",
+    "Drosophila pseudoobscura": "GCF_009870125.1",
+    "Drosophila persimilis": "GCF_003286085.1",
+    "Drosophila willistoni": "GCF_000005925.1",
+    "Scaptodrosophila lebanonensis": "GCF_003285725.1",
+    "Bactrocera dorsalis": "GCF_000789215.1",
+    "Bactrocera latifrons": "GCF_001853355.1",
+    "Musca domestica": "GCF_000371365.1",
+}
+CASE={name:acc for name,acc in REFERENCE_ASSEMBLIES.items() if acc.startswith("GCF_")}
 
 def command(args,timeout=180):
     executable=find_tool('datasets')
@@ -78,6 +105,10 @@ def find_assembly(species):
             matches=valid(command(['datasets','summary','genome','accession',accession]))
             if matches:return matches[0],'case_accession_verified'
         except (RuntimeError,ValueError):pass
+        # The fallback is explicitly flagged; never silently assert article reproducibility.
+        fallback_note="case_accession_unavailable_fallback"
+    else:
+        fallback_note="not_pinned_flybase_ncbi_fallback" if species=="Drosophila melanogaster" else "ncbi_taxon_search"
     matches=valid(command(['datasets','summary','genome','taxon',species,'--annotated','--limit','20']))
     if not matches:matches=valid(command(['datasets','summary','genome','taxon',species,'--limit','20']))
     if not matches:raise LookupError('No valid NCBI assembly for '+species)
@@ -85,7 +116,7 @@ def find_assembly(species):
         i=r.get('assembly_info',{})
         return (int(bool(r.get('annotation_info'))),int(i.get('assembly_level')=='Chromosome'),
                 int(r['accession'].startswith('GCF_')))
-    return sorted(matches,key=rank,reverse=True)[0],'ncbi_taxon_search'
+    return sorted(matches,key=rank,reverse=True)[0],fallback_note
 
 def download(species,cache='genomes/ncbi_cache'):
     metadata,method=find_assembly(species)
@@ -96,7 +127,7 @@ def download(species,cache='genomes/ncbi_cache'):
         data=json.loads(manifest.read_text())
         f=folder/data['fasta'];g=folder/data['gff'] if data.get('gff') else None
         if f.exists() and (not g or g.exists()):
-            return {'species':species,'accession':accession,'fasta':str(f),'gff':str(g) if g else None,'cached':True}
+            return {'species':species,'accession':accession,'fasta':str(f),'gff':str(g) if g else None,'cached':True,'source':data.get('source'),'reference_expected':REFERENCE_ASSEMBLIES.get(species),'reference_matches_study':accession==REFERENCE_ASSEMBLIES.get(species)}
     archive=folder/'download.zip'
     try:
         try:
@@ -119,7 +150,7 @@ def download(species,cache='genomes/ncbi_cache'):
                 with z.open(gffs[0]) as inp,g.open('wb') as out:shutil.copyfileobj(inp,out)
         (folder/'metadata.json').write_text(json.dumps(metadata,indent=2))
         manifest.write_text(json.dumps({'species':species,'accession':accession,'source':method,'fasta':f.name,'gff':g.name if g else None},indent=2))
-        return {'species':species,'accession':accession,'fasta':str(f),'gff':str(g) if g else None,'cached':False}
+        return {'species':species,'accession':accession,'fasta':str(f),'gff':str(g) if g else None,'cached':False,'source':method,'reference_expected':REFERENCE_ASSEMBLIES.get(species),'reference_matches_study':accession==REFERENCE_ASSEMBLIES.get(species)}
     finally:archive.unlink(missing_ok=True)
 
 def ensure_proteins(assembly,cache='genomes/ncbi_cache'):
@@ -178,7 +209,8 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     """
     events=[]
     def emit(stage,state,detail='',species=None):
-        entry={'stage':stage,'state':state,'detail':str(detail)}
+        entry={'stage':stage,'state':state,'detail':str(detail),
+               'timestamp_utc':datetime.now(timezone.utc).isoformat()}
         if species:entry['species']=species
         events.append(entry)
         if progress:progress(entry)
