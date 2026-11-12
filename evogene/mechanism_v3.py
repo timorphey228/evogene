@@ -44,6 +44,9 @@ def classify(report):
     target = report.get("target_locus") or report.get("target") or {}
     model = parent.get("target_model") or {}
     focal_ok = bool(report.get("focal_reference"))
+    synteny_assessed = any(
+        item.get("status") == "flanks_collinear" for item in synteny.values()
+    )
     annotated_target = model.get("status") == "annotated"
     matched = ancestry["ancestral_conservation"]["observations"]["dna_match_species"]
     coding = ancestry["ancestral_conservation"]["observations"]["cds_overlap_species"]
@@ -102,7 +105,7 @@ def classify(report):
               ["Отсутствие аннотированного CDS не доказывает некодирующее прошлое",
                "Нужны реконструкция предковой ORF и поиск удалённых белковых гомологов"],
               {"syntenic_no_cds_species": noncoding, "coding_overlap_species": coding},
-              bool(synteny), partial=True),
+              synteny_assessed, partial=True),
         _test("dna_duplication", duplicated,
               ["ДНК-повторы и белковая гомология не определяют направление дупликации",
                "Нужны проверка геномного контекста и филогения паралогов"],
@@ -120,7 +123,7 @@ def classify(report):
         _test("transposition", relocation_signals,
               ["Смещение гомолога не доказывает транспозицию: возможны геномные перестройки"],
               {"displaced_species": displaced},
-              bool(synteny)),
+              synteny_assessed),
         _test("fusion", fusion_signals,
               ["Сборочные артефакты, повторы и перестройки могут имитировать слияние"],
               {"independent_query_segment_species": mosaic},

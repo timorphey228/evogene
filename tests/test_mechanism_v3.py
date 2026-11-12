@@ -29,7 +29,7 @@ class ObjectiveClassifierTests(unittest.TestCase):
 
     def test_denovo_not_inferred_from_missing_hits(self):
         r={'relatives':{'yakuba':[]},'synteny_evidence':{'yakuba':{'status':'not_established'}}}
-        self.assertEqual(result(r,'de_novo')['status'],'no_signal')
+        self.assertEqual(result(r,'de_novo')['status'],'not_assessed')
 
     def test_duplication_signal_independent_of_retro(self):
         r={'focal_reference':{'accession':'X'},'target_locus':row(),
