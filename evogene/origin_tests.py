@@ -12,6 +12,28 @@ def screen(report):
     noncoding_syn=[s for s,v in synteny.items() if v.get('status')=='flanks_collinear' and v.get('locus_status')=='homolog_no_cds_overlap']
     coding_syn=[s for s,v in synteny.items() if v.get('status')=='flanks_collinear' and v.get('locus_status')=='homolog_overlaps_cds']
     displaced=[s for s,v in synteny.items() if v.get('status')=='flanks_collinear' and v.get('locus_status')=='homolog_elsewhere']
+    # Screen for mosaic/fusion-like structure: disjoint query segments align to
+    # distant genomic regions in an outgroup; can also reflect rearrangement or
+    # fragmented assemblies and therefore is never a confirmed gene fusion.
+    mosaic=[]
+    for species, all_hits in (report.get('relatives') or {}).items():
+        parts=[h for h in all_hits if h.get('query_length',0)>0 and
+               .20<=h.get('query_coverage',0)<.80 and
+               h.get('identity_approx',0)>=.65 and
+               'query_start' in h and 'query_end' in h]
+        for i,a in enumerate(parts):
+            for b in parts[i+1:]:
+                n=a['query_length']
+                overlap=max(0,min(a['query_end'],b['query_end'])-
+                            max(a['query_start'],b['query_start']))
+                independent=(a.get('chrom')!=b.get('chrom') or
+                             abs(a.get('start',0)-b.get('start',0))>100000)
+                total=(a['query_end']-a['query_start']+
+                       b['query_end']-b['query_start']-overlap)/n
+                if independent and overlap/n<=.05 and total>=.55:
+                    mosaic.append(species)
+                    break
+            if species in mosaic:break
     denovo= len(noncoding_syn)>=2 and not extras and not coding
     return {
       'de_novo':{
@@ -39,9 +61,12 @@ def screen(report):
         'missing':['Verify orthology and ancestral coding state'],
         'interpretation':'Coding-annotated cross-species DNA matches support a conserved candidate.'},
       'other_mechanism':{
-        'status':'not_assessed','support_points':0,'observations':{},
-        'missing':['Fusion, horizontal transfer, transposon domestication and exon shuffling require dedicated data'],
-        'interpretation':'No dedicated screen for other mechanisms; they remain possible.'}
+        'status':'preliminary_candidate' if mosaic else 'insufficient_evidence',
+        'support_points':min(4,2*len(mosaic)),
+        'observations':{'split_homology_species':mosaic},
+        'missing':['Validate gene fusion or mosaic ancestry by independent protein/domain alignments',
+                   'Other mechanisms (HGT, TE domestication, exon shuffling) need dedicated tests'],
+        'interpretation':'Disjoint query segments mapping to distant loci may suggest a chimeric/fusion origin, not proof.'}
     }
 
 def distribute(report):

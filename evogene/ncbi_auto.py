@@ -29,7 +29,7 @@ PANEL={
 CASE={'Drosophila simulans':'GCF_000754195.2','Drosophila sechellia':'GCF_004382195.1','Drosophila yakuba':'GCF_000005975.2','Drosophila erecta':'GCF_003286155.1','Drosophila ananassae':'GCF_003285975.2'}
 
 def command(args,timeout=180):
-    if not shutil.which('datasets'):raise RuntimeError('Install NCBI CLI: brew install ncbi-datasets-cli')
+    if not shutil.which('datasets'):raise RuntimeError('NCBI datasets CLI is not in PATH: install it from NCBI and verify `datasets version`. On macOS add ~/bin to PATH if needed.')
     p=subprocess.run(args,check=False,text=True,capture_output=True,timeout=timeout)
     if p.returncode:raise RuntimeError('NCBI datasets: '+p.stderr[-600:])
     return p.stdout

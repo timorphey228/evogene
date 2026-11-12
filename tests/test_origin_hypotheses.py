@@ -27,8 +27,14 @@ class OriginHypothesisTests(unittest.TestCase):
     def test_conservation_with_cds(self):
         r={'relatives':{'a':[h('overlaps_cds')]}}
         self.assertGreater(screen(r)['ancestral_conservation']['support_points'],0)
-    def test_other_is_unassessed(self):
-        self.assertEqual(screen({'relatives':{}})['other_mechanism']['status'],'not_assessed')
+    def test_other_mosaic_needs_independent_nonoverlapping_query_segments(self):
+        a=h(start=100,end=400);b=h(chrom='3R',start=500000,end=500400)
+        a.update(query_coverage=.40,query_start=0,query_end=400,query_length=1000)
+        b.update(query_coverage=.40,query_start=600,query_end=1000,query_length=1000)
+        r={'relatives':{'a':[a,b]}}
+        self.assertGreater(screen(r)['other_mechanism']['support_points'],0)
+        b['query_start']=100;b['query_end']=500
+        self.assertEqual(screen(r)['other_mechanism']['support_points'],0)
     def test_100_percent_rounding_and_uncertainty(self):
         for n in range(6):
             r={'relatives':{str(i):[h('overlaps_cds')] for i in range(n)}}

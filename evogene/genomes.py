@@ -69,6 +69,7 @@ def map_genome(query,reference,species):
         hits.append({'species':species,'chrom':v[5],'strand':v[4],
                      'start':int(v[7]),'end':int(v[8]),
                      'query_coverage':round((int(v[3])-int(v[2]))/qlen,4),
+                     'query_start':int(v[2]),'query_end':int(v[3]),'query_length':qlen,
                      'identity_approx':round(int(v[9])/aligned,4) if aligned else 0,
                      'mapq':int(v[11])})
     return sorted(hits,key=lambda h:h['identity_approx']*h['query_coverage'],reverse=True)
