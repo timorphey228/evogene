@@ -138,3 +138,46 @@ name and an optional GFF3 selection; there is no fixed two-genome restriction.
 NCBI automatic species are limited to the study's **20-name panel**, not to a
 hard count of five. Downloading many assemblies is resource-intensive and may
 leave more missing annotations; select appropriate outgroups deliberately.
+
+
+## User scenario: one or more candidate genes plus comparative sequences
+
+There are now **three distinct supported input scenarios**, not one ambiguous
+"FASTA" input:
+
+1. **Direct focal + comparative DNA FASTAs:** launch `app.py` and select
+   `Кандидатные гены + сравнительные FASTA`. In the focal file, use headers
+   `>GENE_ID|FOCAL_SPECIES`, one target per ID. In the second file, use
+   `>GENE_ID|COMPARISON_SPECIES|OPTIONAL_LOCUS`, with any number of
+   comparisons per gene. The UI analyzes all candidate IDs automatically.
+2. **Full assemblies:** upload focal FASTA/GFF3 and relative genomes in
+   `app.py`, or use NCBI auto download via `auto_app.py`.
+3. **Peng & Zhao comparative extract:** upload the three-section
+   `supplementary_file_unannotated_alignments.fasta`; select any set of
+   `FBgn...` IDs and comparative species. Its species data are already
+   PRESELECTED by the paper, not an unbiased whole-genome search.
+
+**New per-gene report (six case criteria):** input provenance, independent
+sequence comparisons, explicit `insufficient_data` or preliminary evidence,
+concrete observed evidence, stage trace, SHA-256 input checksums,
+reproducibility, and separation of observations from evolutionary mechanisms.
+Batch conclusions export as `JSON` and human-readable `Markdown` without
+claiming unperformed ancestral reconstruction or phylogenetic supports.
+
+CLI for one or many paper-derived genes:
+
+```bash
+python -m evogene.case_batch_cli \
+  --input supplementary_file_unannotated_alignments.fasta \
+  --gene FBgn0040343 --gene FBgn0262810 --gene FBgn0025616 \
+  --method raw --output results/case2_multi_gene.json
+```
+
+For published-file multi-gene batches, the original 54MB source is read just
+three times, then selected gene subsets are analyzed locally. This avoids
+repeatedly scanning the entire file for each gene.
+
+A matching coordinate or a local DNA alignment is not sufficient to determine
+whether a gene arose by duplication, de novo emergence, or ancient divergence.
+In such cases the correct reported outcome is **insufficient data**, including
+which specific investigations are missing.
