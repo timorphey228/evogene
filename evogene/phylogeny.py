@@ -27,6 +27,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 from .genomes import fasta
+from .tools import find_tool
 
 MAX_SEQUENCES = 21
 MAX_DNA_LENGTH = 12000
@@ -223,8 +224,8 @@ def infer_tree(sequences, *, try_external=True, bootstrap_replicates=100):
         "Input is genomic DNA; locus similarities are not validated orthology.",
         "Unannotated or duplicated loci may distort topology; no evolutionary mechanism is proven.",
     ]
-    mafft = shutil.which("mafft") if try_external else None
-    iqtree = (shutil.which("iqtree2") or shutil.which("iqtree")) if try_external else None
+    mafft = find_tool("mafft") if try_external else None
+    iqtree = (find_tool("iqtree2") or find_tool("iqtree")) if try_external else None
     aligned = None
     aligned_text = None
     diagnostics = []
