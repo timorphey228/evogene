@@ -99,7 +99,7 @@ python -m pip install -r requirements.txt
 python -m streamlit run auto_app.py
 ```
 
-Alternative manual workflow:
+Alternative manual workflow (any number of manually uploaded relative FASTA files, with individually assigned GFF3 where available):
 
 ```bash
 python -m streamlit run app.py
@@ -132,3 +132,9 @@ genes or controlled scenarios** with input accessions, alignments, limitations,
 alternative hypotheses and complete analysis traces. The bundled
 `data/demo_evidence.csv` is **synthetic** and must not be presented as
 scientific validation.
+
+In the local-genome UI, each uploaded relative FASTA gets an explicit species
+name and an optional GFF3 selection; there is no fixed two-genome restriction.
+NCBI automatic species are limited to the study's **20-name panel**, not to a
+hard count of five. Downloading many assemblies is resource-intensive and may
+leave more missing annotations; select appropriate outgroups deliberately.
