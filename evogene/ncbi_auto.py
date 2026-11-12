@@ -26,10 +26,37 @@ def reverse_complement(sequence):
     return sequence.upper().translate(str.maketrans('ACGTN', 'TGCAN'))[::-1]
 
 
-PANEL={
-'Drosophila melanogaster':['Drosophila simulans','Drosophila sechellia','Drosophila yakuba','Drosophila erecta','Drosophila ananassae'],
-'Drosophila simulans':['Drosophila melanogaster','Drosophila sechellia','Drosophila yakuba','Drosophila erecta','Drosophila ananassae'],
-'Drosophila yakuba':['Drosophila erecta','Drosophila melanogaster','Drosophila simulans','Drosophila sechellia','Drosophila ananassae']}
+# All 20 fly species represented in the article-associated extract. These are
+# a CHOICE PANEL, not a hard cap on scientific comparisons: users can select 1–19
+# relatives. Availability and genome/annotation quality must be verified per NCBI.
+SPECIES_BY_CODE = {
+    "dmel": "Drosophila melanogaster",
+    "dsim": "Drosophila simulans",
+    "dsec": "Drosophila sechellia",
+    "dyak": "Drosophila yakuba",
+    "dere": "Drosophila erecta",
+    "dfic": "Drosophila ficusphila",
+    "drho": "Drosophila rhopaloa",
+    "dele": "Drosophila elegans",
+    "deug": "Drosophila eugracilis",
+    "dtak": "Drosophila takahashii",
+    "dbia": "Drosophila biarmipes",
+    "dkik": "Drosophila kikkawai",
+    "dana": "Drosophila ananassae",
+    "dper": "Drosophila persimilis",
+    "dpse": "Drosophila pseudoobscura",
+    "dmir": "Drosophila miranda",
+    "dwil": "Drosophila willistoni",
+    "sleb": "Scaptodrosophila lebanonensis",
+    "blat": "Bactrocera latifrons",
+    "bdor": "Bactrocera dorsalis",
+}
+SPECIES_ORDER = tuple(SPECIES_BY_CODE.values())
+PANEL = {
+    species: [relative for relative in SPECIES_ORDER if relative != species]
+    for species in SPECIES_ORDER
+}
+
 CASE={'Drosophila simulans':'GCF_000754195.2','Drosophila sechellia':'GCF_004382195.1','Drosophila yakuba':'GCF_000005975.2','Drosophila erecta':'GCF_003286155.1','Drosophila ananassae':'GCF_003285975.2'}
 
 def command(args,timeout=180):
@@ -144,7 +171,7 @@ def target_gene(path,sequence='',chrom='',start=None,end=None,strand='+'):
     if len(dna)<30 or any(x not in 'ACGTN' for x in dna):raise ValueError('Gene query must be >=30 DNA nucleotides A/C/G/T/N')
     return dna,mode
 
-def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',start=None,end=None,strand='+',count=2,cache='genomes/ncbi_cache',progress=None):
+def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',start=None,end=None,strand='+',count=2,relative_species=None,cache='genomes/ncbi_cache',progress=None):
     """Return evidence plus auditable, real-time pipeline events.
 
     Every step records completed/skipped/failed, never invented progress.
@@ -158,12 +185,22 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
 
     if target_species not in PANEL:
         raise ValueError('Automatic panel not defined for '+target_species)
-    if not 1<=count<=5:
-        raise ValueError('Relative count must be 1..5')
+    if relative_species is None:
+        if not 1 <= count <= len(PANEL[target_species]):
+            raise ValueError(f'Relative count must be 1..{len(PANEL[target_species])}')
+        selected_species = PANEL[target_species][:count]
+    else:
+        selected_species = list(relative_species)
+        if not selected_species:
+            raise ValueError('Choose at least one comparison species')
+        if len(set(selected_species)) != len(selected_species):
+            raise ValueError('Comparison species must be unique')
+        if any(species not in PANEL[target_species] for species in selected_species):
+            raise ValueError('Comparison species must differ from target and belong to the supported panel')
     query,mode=target_gene(target_fasta,gene_sequence,chrom,start,end,strand)
     emit('input','completed',f'{len(query)} nt; input={mode}; target={target_species}')
     selected=[]; failures=[]; hits={}; synteny_evidence={}
-    for species in PANEL[target_species][:count]:
+    for species in selected_species:
         try:
             emit('download','running','Поиск генома и GFF3',species)
             assembly=download(species,cache)
@@ -270,6 +307,7 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
         'phylogeny':{'status':'not_assessed',
                      'reason':'No verified homologous protein MSA, model selection or ML tree is computed.'},
         'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
+        'requested_relative_species':selected_species,
         'hypothesis':category,'query_length_nt':len(query),
         'matching_species':matching,'coding_species':coding,'ncbi_assemblies':selected,
         'download_or_analysis_errors':failures,'relatives':hits,
