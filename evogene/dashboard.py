@@ -267,6 +267,20 @@ def _results(report):
     with tabs[2]:
         st.subheader("Наблюдения по выбранным геномам")
         core=entry["evidence"]
+        references=([core["focal_reference"]] if core.get("focal_reference") else []) + core.get("ncbi_assemblies",[])
+        if references:
+            st.markdown("**Версии и происхождение геномных сборок**")
+            st.dataframe([{
+                "Вид":item.get("species"),
+                "Использованный accession":item.get("accession"),
+                "Версия из статьи":item.get("reference_expected"),
+                "Совпадает со статьёй":item.get("reference_matches_study"),
+                "Источник":item.get("source"),
+                "GFF3":item.get("annotation_available",bool(item.get("gff"))),
+            } for item in references],use_container_width=True,hide_index=True)
+            if any(item.get("reference_matches_study") is False for item in references):
+                st.warning("Некоторые сборки отличаются от версии, указанной в статье. "
+                           "Восстановление оригинальных координат требует исходных референсов.")
         st.dataframe(core.get("species_status",[]),use_container_width=True,hide_index=True)
         st.caption("Отсутствие найденного совпадения не доказывает утрату гена.")
         orf_rows=entry.get("syntenic_orf_evidence") or {}
