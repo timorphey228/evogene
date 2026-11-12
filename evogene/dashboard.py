@@ -133,8 +133,7 @@ def _run(file,focal,chosen,te,phylogeny,cache):
         st.warning("Для автоматической загрузки и выравнивания установите: "+", ".join(missing))
     disabled=(not file or not chosen or bool(missing))
     if st.button("Запустить исследование",type="primary",use_container_width=True,disabled=disabled):
-        if st.session_state.get("evo_current_inputs"):
-            st.session_state.pop("evo_project",None)
+        st.session_state.pop("evo_project",None)
         with st.status("Выполняется анализ выбранных генов",expanded=True) as status:
             lines=st.empty()
             track=[]
@@ -257,6 +256,19 @@ def _results(report):
         core=entry["evidence"]
         st.dataframe(core.get("species_status",[]),use_container_width=True,hide_index=True)
         st.caption("Отсутствие найденного совпадения не доказывает утрату гена.")
+        orf_rows=entry.get("syntenic_orf_evidence") or {}
+        with st.expander("Потенциальные ORF в синтенных локусах"):
+            st.caption("Это полные ATG–stop рамки в отдельных геномных фрагментах. "
+                       "Без сплайсированного сравнения и реконструкции предковых состояний "
+                       "они не доказывают ни кодирование, ни происхождение de novo.")
+            st.dataframe([
+                {"Вид":species,"Статус":item.get("status"),
+                 "Длина фрагмента, нт":item.get("length_nt"),
+                 "Кандидатных ORF":item.get("candidate_complete_orf_count"),
+                 "Максимальная ORF, а.о.":item.get("longest_complete_orf_aa"),
+                 "Ограничение":item.get("reason",item.get("interpretation"))}
+                for species,item in orf_rows.items()
+            ],hide_index=True,use_container_width=True)
         render_report_visualizations(core)
     with tabs[3]:
         render_analysis_annotations(entry["evidence"])
@@ -308,6 +320,15 @@ def main():
     ])
     with input_tab:
         file,focal,chosen,te,phylogeny,cache=_input_panel()
+        from hashlib import sha256
+        fingerprint=(
+            sha256(file.getvalue()).hexdigest() if file else None,
+            focal,tuple(chosen),sha256(te.getvalue()).hexdigest() if te else None,
+            phylogeny,cache,
+        )
+        if st.session_state.get("evo_run_input_fingerprint") != fingerprint:
+            st.session_state.pop("evo_project",None)
+            st.session_state["evo_run_input_fingerprint"]=fingerprint
         _run(file,focal,chosen,te,phylogeny,cache)
     report=st.session_state.get("evo_project")
     with result_tab:
