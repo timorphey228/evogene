@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from Bio import Phylo
 
-from evogene.phylogeny import infer_tree, collect_locus_sequences
+from evogene.phylogeny import infer_tree, collect_locus_sequences, alignment_quality
 from evogene.evolutionary_workflow import candidate_records, run_project
 
 
@@ -28,6 +28,48 @@ class TreeTests(unittest.TestCase):
         self.assertEqual({x.name for x in tree.get_terminals()},set(seqs))
         self.assertTrue(any("NOT a validated" in x for x in r["warnings"]))
         self.assertFalse(r["rooted"])
+
+    def test_real_aligned_ml_output_is_preserved(self):
+        from types import SimpleNamespace
+        from Bio.Align import MultipleSeqAlignment
+        from Bio.SeqRecord import SeqRecord
+        from Bio.Seq import Seq
+        rows={
+            "a":"ATG"*34+"AAA"*8,
+            "b":"ATG"*34+"AAG"*8,
+            "c":"ATG"*30+"CCC"*12,
+            "d":"ATG"*28+"TAA"*14
+        }
+        def executable(name):
+            return "/usr/bin/"+name
+        def fake_run(cmd, **kwargs):
+            if "mafft" in cmd[0]:
+                return SimpleNamespace(returncode=0,stderr="MAFFT successful",
+                    stdout="".join(f">{name}\\n{seq}\\n" for name,seq in rows.items()))
+            prefix=cmd[cmd.index("--prefix")+1]
+            Path(prefix+".treefile").write_text(
+                "((a:0.01,b:0.02)99/96:0.03,(c:0.04,d:0.05)98/94:0.06);")
+            return SimpleNamespace(returncode=0,stderr="IQ-TREE successful",stdout="")
+        with patch("evogene.phylogeny.find_tool",side_effect=executable), \\
+             patch("evogene.phylogeny.subprocess.run",side_effect=fake_run):
+            result=infer_tree(rows,try_external=True)
+        self.assertEqual(result["status"],"inferred")
+        self.assertIn("maximum_likelihood",result["method"])
+        self.assertEqual(result["support_type"],
+                         "UFBoot 1000 + SH-aLRT 1000 (IQ-TREE)")
+        self.assertEqual(result["alignment_quality"]["aligned_columns"],126)
+        self.assertEqual(len(result["diagnostics"]),2)
+        self.assertEqual(len(list(Phylo.read(StringIO(result["newick"]),"newick").get_terminals())),4)
+
+    def test_alignment_quality_flags_uninformative_sites(self):
+        from Bio.Align import MultipleSeqAlignment
+        from Bio.SeqRecord import SeqRecord
+        from Bio.Seq import Seq
+        alignment=MultipleSeqAlignment([
+            SeqRecord(Seq("A"*70),id=name) for name in ("a","b","c","d")])
+        q=alignment_quality(alignment)
+        self.assertTrue(q["low_information"])
+        self.assertEqual(q["variable_sites"],0)
 
     def test_fewer_than_three_sequences_is_not_fake_tree(self):
         r=infer_tree({"a":"ACGT"*12,"b":"ACGT"*12},try_external=False)
