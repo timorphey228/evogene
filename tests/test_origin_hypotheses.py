@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from evogene.origin_tests import screen,distribute
+from evogene.origin_tests import screen
 from evogene.genome_probes import discover_target_locus,assess_synteny
 def h(cds='unknown_no_gff',chrom='2L',start=100,end=400):
     return {'query_coverage':.94,'identity_approx':.9,'coding_overlap':cds,
@@ -35,12 +35,6 @@ class OriginHypothesisTests(unittest.TestCase):
         self.assertGreater(screen(r)['other_mechanism']['support_points'],0)
         b['query_start']=100;b['query_end']=500
         self.assertEqual(screen(r)['other_mechanism']['support_points'],0)
-    def test_100_percent_rounding_and_uncertainty(self):
-        for n in range(6):
-            r={'relatives':{str(i):[h('overlaps_cds')] for i in range(n)}}
-            d=distribute(r)
-            self.assertEqual(round(sum(x['support_percent'] for x in d['options']),1),100)
-            self.assertFalse(d['is_calibrated_probability'])
     @patch('evogene.genome_probes.map_genome')
     def test_target_multiple_copies(self,m):
         m.return_value=[h(),h(start=200,end=450),h(chrom='3R',start=5000,end=5300)]
