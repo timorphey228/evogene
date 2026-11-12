@@ -39,11 +39,12 @@ case inputs) now expose interactive panels:
    FASTA. Raw mapping blocks must not be mislabeled as an MSA.
 3. **Flank / candidate-homolog synteny tracks** only when physical coordinates
    are available.
-4. **Six-frame complete-ORF tracks** from input genomic DNA, clearly marked
+4. **CIGAR insertion/deletion operation counts** from minimap2, labeled as alignment gaps, not ancestral mutations.
+5. **Six-frame complete-ORF tracks** from input genomic DNA, clearly marked
    as candidate coding potential.
-5. **Independent hypothesis evidence and uncertainty**: status, completeness,
+6. **Independent hypothesis evidence and uncertainty**: status, completeness,
    unassessed tests and processing failures, never forced 100%-sum scores.
-6. **Newick phylogeny visualization** with original node labels/branch lengths
+7. **Newick phylogeny visualization** with original node labels/branch lengths
    on a genuinely supplied tree. EvoGene currently **does not perform ML
    tree inference or calculate UFBoot/SH-aLRT**; these must come from
    verified aligned homologs and an external phylogenetic workflow.
