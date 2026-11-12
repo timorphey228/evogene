@@ -206,6 +206,34 @@ def _bootstrap_support(tree, alignment, *, repeats=100, seed=2024):
     return repeats
 
 
+
+def alignment_quality(alignment):
+    """Conservative information audit, never a guarantee of correct homology."""
+    if alignment is None:
+        return {"status":"not_available","reason":"MAFFT MSA not computed"}
+    rows=[str(rec.seq).upper() for rec in alignment]
+    n=len(rows[0])
+    variable=0; informative=0; ambiguous=0
+    for i in range(n):
+        bases=[row[i] for row in rows]
+        clean=[c for c in bases if c in "ACGT"]
+        if len(clean)<max(2,len(rows)//2):
+            ambiguous+=1
+            continue
+        counts=Counter(clean)
+        if len(counts)>1:
+            variable+=1
+        if sum(count >= 2 for count in counts.values()) >= 2:
+            informative+=1
+    return {
+        "status":"audited","aligned_columns":n,
+        "variable_sites":variable,
+        "parsimony_informative_sites":informative,
+        "ambiguous_or_sparse_columns":ambiguous,
+        "low_information":(variable < 5 or (len(rows)>=4 and informative < 3)),
+        "warning":"Sequence variation and parsimony-informative sites do not establish orthology."
+    }
+
 def infer_tree(sequences, *, try_external=True, bootstrap_replicates=100):
     """Return a real inferred tree or a diagnostic reason for impossibility."""
     if len(sequences) < 3:
@@ -246,6 +274,9 @@ def infer_tree(sequences, *, try_external=True, bootstrap_replicates=100):
                         aligned, aligned_text = candidate, cp.stdout
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
             diagnostics.append({"tool": "MAFFT", "error": str(exc)})
+    qc=alignment_quality(aligned)
+    if qc.get("low_information"):
+        warnings.append("Very few informative alignment sites: topology and support require extra scrutiny.")
     if aligned is not None and iqtree:
         try:
             with TemporaryDirectory(prefix="evogene_iqtree_") as tmp:
@@ -270,7 +301,7 @@ def infer_tree(sequences, *, try_external=True, bootstrap_replicates=100):
                         "support_type": "UFBoot 1000 + SH-aLRT 1000 (IQ-TREE)",
                         "alignment": "MAFFT nucleotide MSA", "alignment_fasta": aligned_text,
                         "rooted": False, "warnings": warnings,
-                        "diagnostics": diagnostics,
+                        "alignment_quality":qc, "diagnostics": diagnostics,
                         "description": "ML topology based on mapped nucleotide loci, not validated orthology.",
                     }
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
@@ -307,7 +338,7 @@ def infer_tree(sequences, *, try_external=True, bootstrap_replicates=100):
         "support_type": support, "bootstrap_replicates": repeats,
         "alignment": "MAFFT nucleotide MSA" if aligned is not None else None,
         "alignment_fasta": aligned_text, "warnings": warnings,
-        "diagnostics": diagnostics,
+        "alignment_quality":qc, "diagnostics": diagnostics,
         "description": ("Measured DNA similarity tree; ancestry and evolutionary "
                         "mechanisms require independent synteny/orthology checks."),
     }
