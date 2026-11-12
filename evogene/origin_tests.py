@@ -68,28 +68,3 @@ def screen(report):
                    'Other mechanisms (HGT, TE domestication, exon shuffling) need dedicated tests'],
         'interpretation':'Disjoint query segments mapping to distant loci may suggest a chimeric/fusion origin, not proof.'}
     }
-
-def distribute(report):
-    tests=screen(report)
-    errors=len(report.get('download_or_analysis_errors',[]))
-    w={key:v['support_points'] for key,v in tests.items()}
-    w['unresolved']=8+2*errors
-    order=('de_novo','duplication','transposition','ancestral_conservation','other_mechanism','unresolved')
-    labels={'de_novo':'De novo','duplication':'Дупликация','transposition':'Транспозиция / ретротранспозиция',
-            'ancestral_conservation':'Древнее сохранённое происхождение','other_mechanism':'Другой механизм',
-            'unresolved':'Недостаточно данных'}
-    raw={key:1000*w[key]/sum(w.values()) for key in order}
-    units={key:int(raw[key]) for key in order}
-    ranks=sorted(order,key=lambda key:(-(raw[key]-units[key]),order.index(key)))
-    for key in ranks[:1000-sum(units.values())]:units[key]+=1
-    return {'kind':'normalized_screening_evidence_not_probability','is_calibrated_probability':False,
-       'scoring_method':'origin_screens_v2','tests':tests,
-       'options':[{'mechanism':key,'label':labels[key],'support_percent':units[key]/10,
-                   'evidence_weight':w[key],
-                   'status':tests[key]['status'] if key in tests else 'uncertain',
-                   'explanation':tests[key]['interpretation'] if key in tests else 'Mechanism unresolved.'}
-                  for key in order],
-       'warning':'Проценты — нормированные оценки диагностических признаков, НЕ вероятности. 0% не исключает механизм.',
-       'conclusion':('Есть предварительные кандидаты по диагностическим признакам; происхождение требует проверки.'
-                     if any(t['status']=='preliminary_candidate' for t in tests.values())
-                     else 'Недостаточно данных, чтобы установить механизм происхождения.')}
