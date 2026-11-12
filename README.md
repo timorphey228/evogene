@@ -1,49 +1,54 @@
-# EvoGene · Gene origin reconstruction (hackathon prototype)
+# EvoGene v2 — анализ геномных последовательностей
 
-Evidence-aware classification of protein-coding gene origins, initially targeting *Drosophila melanogaster*.
+Два режима анализа:
 
-## Sources and scientific basis
+1. **genomes**: FASTA целевого генома + GFF3 (с координатами выбранного гена) + FASTA родственных видов и, желательно, их GFF3. Реальное сопоставление ДНК с помощью minimap2, оценка покрытия и примерной идентичности, поиск дополнительных локусов и перекрытия аннотированных CDS.
+2. **case**: анализ загруженного в кейсе файла `supplementary_file_unannotated_alignments.txt`, содержащего заранее выделенные Cactus-фрагменты для генов. Он **не является набором полных геномов**.
 
-- Peng & Zhao (2024), *The origin and structural evolution of de novo genes in Drosophila*, Nature Communications: https://www.nature.com/articles/s41467-024-45028-1
-- Original LiZhaoLab research code: https://github.com/LiZhaoLab/DrosophilaDenovoGene
+## Установка на Mac
 
-Upstream analysis methods: ProcessingWholeGenomeAlignments/ortholog_mapping.py, ortholog_relations.py, find_last_orf.py, check_homologs.py, extract_raw_hit.py, extract_alnscore_genewise.py. Their original pipeline requires progressive Cactus/HAL and laboratory files. **This MVP does not reproduce those alignment analyses**: it independently integrates evidence that has already been obtained. The application does not copy upstream source code.
+```bash
+brew install minimap2
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-## Run
+## Запуск по целым геномам
 
-Python 3.10+.
+```bash
+python -m evogene.pipeline genomes \
+  --target-fasta /data/dmel_genome.fna.gz \
+  --target-gff /data/dmel_annotations.gff3.gz \
+  --gene FBgn0040343 \
+  --relative dsim=/data/dsim_genome.fna.gz:/data/dsim_annotations.gff3.gz \
+  --relative dyak=/data/dyak_genome.fna.gz:/data/dyak_annotations.gff3.gz \
+  --results results/genome_analysis
+```
 
-    python -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
-    streamlit run app.py
+GFF3 должен содержать запись `gene` с соответствующим ID. Сопоставление выполнено для ДНК всего генного интервала, а не для выделенного белка или отдельных экзонов. Сходный участок не означает ортологию, а отсутствие аннотированного CDS не доказывает некодирующее происхождение.
 
-CLI (no third-party dependencies):
+## Примеры по данным кейса
 
-    python -m evogene.cli --evidence data/demo_evidence.csv --properties /path/to/41467_2024_45028_MOESM10_ESM.xlsx --output results.json
-    python -m unittest discover -s tests -v
+```bash
+python -m evogene.pipeline case \
+  --alignment-file /path/to/supplementary_file_unannotated_alignments.txt \
+  --gene FBgn0262810 --gene FBgn0025616 \
+  --gene FBgn0029535 --gene FBgn0040343 \
+  --results results/case_examples
+```
 
-Windows virtual environment: .venv\Scripts\activate
+Результаты четырёх реальных примеров сохранены в `results/case_examples/`. Они основаны на *предварительно отобранных* фрагментах исходного файла, а не на автоматическом поиске по полным сборкам. Для полного комплекта JSON/CSV и тестов также доступен архив EvoGene_genome_analysis_v2.zip.
 
-## Data
+Сборки из приложенной таблицы `supplementary_file_genome_assembly.csv` перечислены в `data/assembly_accessions.csv`. Это идентификаторы сборок, **не FASTA**.
 
-The case's supplementary XLSX, Figure 2 a,c,d,e,f,g,h, contains FBID, protein length, ISD, TM probabilities, RSA, GC content, SignalP, expression, tissue specificity, research de novo gene annotation and evolutionary branch age. **These are reference metadata, not direct proof of evolutionary origin.** The original workbook can be uploaded in the app or supplied to the CLI; it is not embedded into the repo.
+## Научные ограничения
 
-The evidence file has columns:
+- Поиск сходства ДНК не определяет ортологию или механизм возникновения сам по себе.
+- Необходимо отдельно подтвердить синтению по фланкирующим генам, гомологию белков, дерево генов и предковое состояние ORF.
+- Отсутствие попадания может объясняться потерей гена, дивергенцией или качеством сборки.
+- Алгоритм не выдаёт калиброванную вероятность de novo или точный возраст.
+- Результаты для примеров — **наблюдения о сходстве последовательностей, а не доказанные механизмы эволюции**.
 
-    gene_id,species,paralog_detected,distant_coding_homolog,syntenic_outgroup_locus,outgroup_locus_noncoding,homolog_search_completed,rearrangement_evidence,outgroup_count,alignment_identity,notes
-
-Boolean values are yes, no, unknown. Unknown is **not** no. Demo evidence is *SYNTHETIC* for testing despite using gene IDs from the supplement; its classifications are **not new biological findings**.
-
-A de novo proposal requires a syntenic noncoding locus in outgroups, at least two outgroup species, and completed search for homologs without contradictory coding homologs. This is a conservative prototype heuristic, not a validated published threshold. Weight scores are **not posterior probabilities or calibrated confidences**.
-
-Possible outputs: de_novo, duplication, ancient_divergence, other_mechanism, undetermined. Each result includes supporting evidence, conflicts, missing evidence and qualitative scores.
-
-## Future validation
-
-1. Obtain real DNA/protein FASTA, genome references, Cactus/HAL liftover and synteny outputs for related species.
-2. Generate gene-by-gene evidence with exact references, aligner thresholds and provenance; detect hidden homology before any de novo claim.
-3. Compare candidate gene trees and alignments, validate classification on independent positive and negative controls.
-4. Estimate uncertainties scientifically; add phylogenetic visualization and automated sequence-analysis jobs.
-
-Citation: Peng & Zhao 2024. Branch labels Br1/Br9 are kept as labels; not converted to absolute ages.
+Биоинформатическая основа: [LiZhaoLab/DrosophilaDenovoGene](https://github.com/LiZhaoLab/DrosophilaDenovoGene), стадии Cactus, ортологи, проверка скрытых гомологов. Код прототипа реализован отдельно.
