@@ -363,21 +363,35 @@ def render_report_visualizations(report):
             st.markdown("**Фактически выполненные этапы**")
             st.dataframe(list(final.values()), use_container_width=True, hide_index=True)
     with tab_tree:
-        st.caption("Дерево строится не из таблицы совпадений: загрузите Newick "
-                   "после настоящей реконструкции (например, IQ-TREE). "
-                   "Числа в узлах показываются без переименования в bootstrap, "
-                   "поскольку их смысл задаёт программа-источник.")
-        tree_file = st.file_uploader("Newick дерево (.nwk, .treefile, .newick)",
-                                     type=["nwk", "newick", "treefile", "tree", "txt"],
-                                     key="evo_tree")
-        if tree_file is None:
-            st.info("Филогенетическое дерево не рассчитано текущим анализом. "
-                    "Нет основания рисовать вымышленную топологию или поддержку.")
-        else:
+        tree = report.get("phylogeny") or {}
+        if tree.get("newick"):
+            st.caption("Показана реально вычисленная топология. Метод: " +
+                       str(tree.get("method","не указан")) +
+                       ". Дерево не укоренено; геномное сходство не доказывает ортологию.")
+            if tree.get("status")=="inferred_exploratory":
+                st.warning("Предварительная дистанционная кластеризация; "
+                           "не является подтверждённым деревом генного семейства.")
             try:
-                dot = newick_to_dot(tree_file.getvalue().decode("utf-8-sig"))
-                st.graphviz_chart(dot, use_container_width=True)
-                st.download_button("Экспортировать Newick", tree_file.getvalue(),
-                    file_name="uploaded_gene_tree.nwk", mime="text/plain")
-            except (UnicodeDecodeError, ValueError, TypeError, AttributeError, IndexError) as exc:
-                st.error(f"Некорректное дерево: {exc}")
+                st.graphviz_chart(newick_to_dot(tree["newick"]),use_container_width=True)
+            except (ValueError,TypeError,AttributeError) as exc:
+                st.error("Ошибка отображения Newick: " + str(exc))
+            st.download_button("Скачать вычисленный Newick",tree["newick"],
+                               file_name=str(report.get("gene_id","gene"))+".nwk",
+                               mime="text/plain",key="computed_evo_tree")
+        else:
+            st.caption("Для дерева нужны действительно гомологичные последовательности. "
+                       "При отсутствии данных можно загрузить проверенное Newick извне.")
+            tree_file = st.file_uploader("Newick дерево (.nwk, .treefile, .newick)",
+                                         type=["nwk", "newick", "treefile", "tree", "txt"],
+                                         key="evo_tree")
+            if tree_file is None:
+                st.info("Филогенетическое дерево не рассчитано текущим анализом. "
+                        "Нет основания рисовать вымышленную топологию или поддержку.")
+            else:
+                try:
+                    dot = newick_to_dot(tree_file.getvalue().decode("utf-8-sig"))
+                    st.graphviz_chart(dot, use_container_width=True)
+                    st.download_button("Экспортировать Newick", tree_file.getvalue(),
+                        file_name="uploaded_gene_tree.nwk", mime="text/plain")
+                except (UnicodeDecodeError, ValueError, TypeError, AttributeError, IndexError) as exc:
+                    st.error(f"Некорректное дерево: {exc}")
