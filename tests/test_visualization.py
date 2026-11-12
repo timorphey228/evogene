@@ -3,7 +3,7 @@ import unittest
 
 from evogene.visualization import (
     alignment_blocks, synteny_blocks, orf_blocks, mechanism_rows,
-    parse_aligned_fasta, alignment_cells, newick_to_dot,
+    parse_aligned_fasta, alignment_cells, newick_to_dot, alignment_gap_rows,
 )
 
 
@@ -58,6 +58,17 @@ class VisualizationTests(unittest.TestCase):
         self.assertEqual(len(protein), 2)
         with self.assertRaises(ValueError):
             parse_aligned_fasta(">a\nACT\n>b\nACTG\n")
+
+    def test_paf_cigar_insertion_deletion(self):
+        from evogene.genomes import cigar_gap_summary
+        self.assertEqual(cigar_gap_summary(["cg:Z:12M3I2D10M"] * 0 + [""] * 12 + ["cg:Z:12M3I2D10M"]),
+                         {"alignment_insertion_nt": 3, "alignment_deletion_nt": 2})
+        self.assertIsNone(cigar_gap_summary([""] * 12)["alignment_deletion_nt"])
+        rows = alignment_gap_rows({"relatives": {"a": [{
+            "alignment_insertion_nt": 3, "alignment_deletion_nt": 2,
+            "chrom": "X"
+        }]}})
+        self.assertEqual(len(rows), 2)
 
     def test_newick_tree_only_from_supplied_data(self):
         dot = newick_to_dot("((dmel:0.1,dsim:0.2)95:0.1,dyak:0.3);")
