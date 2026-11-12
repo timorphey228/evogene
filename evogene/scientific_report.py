@@ -26,7 +26,7 @@ OUTCOMES = ("de_novo", "duplication", "ancient_origin", "other_mechanism",
 
 
 def _software_versions():
-    from subprocess import run
+    from subprocess import run, TimeoutExpired
     try:
         biopython = version("biopython")
     except PackageNotFoundError:
@@ -36,7 +36,7 @@ def _software_versions():
         proc = run(["git", "-C", str(repo), "rev-parse", "HEAD"],
                    text=True, capture_output=True, timeout=3, check=False)
         commit = proc.stdout.strip() if proc.returncode == 0 else None
-    except (OSError, TimeoutError):
+    except (OSError, TimeoutError, TimeoutExpired):
         commit = None
     return {"python": sys.version.split()[0], "biopython": biopython,
             "git_commit": commit, "analysis": SCHEMA}
