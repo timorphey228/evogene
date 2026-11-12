@@ -58,7 +58,7 @@ def cigar_gap_summary(paf_fields):
     cigar=next((item[5:] for item in paf_fields[12:] if item.startswith('cg:Z:')),None)
     if cigar is None:
         return {'alignment_insertion_nt':None,'alignment_deletion_nt':None}
-    matches=list(re.finditer(r'(\\d+)([MIDNSHP=X])',cigar))
+    matches=list(re.finditer(r'([0-9]+)([MIDNSHP=X])',cigar))
     if not matches or ''.join(m.group(0) for m in matches)!=cigar:
         return {'alignment_insertion_nt':None,'alignment_deletion_nt':None}
     return {
