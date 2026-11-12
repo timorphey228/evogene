@@ -1,6 +1,6 @@
 """Genome FASTA/GFF3 -> DNA locus mapping with minimap2 (not validated orthology)."""
 from dataclasses import dataclass,asdict
-import gzip, subprocess, shutil, tempfile
+import gzip, subprocess, shutil, tempfile, re
 from pathlib import Path
 from .mechanism_v3 import classify
 from .gene_models import compare_retrocopy
@@ -53,6 +53,20 @@ def gene_region(fasta_path,gff_path,gene_id):
             return gene,dna
     raise ValueError('GFF chromosome not present in target FASTA')
 
+def cigar_gap_summary(paf_fields):
+    """Counts alignment operations, NOT phylogenetic indels or frameshifts."""
+    cigar=next((item[5:] for item in paf_fields[12:] if item.startswith('cg:Z:')),None)
+    if cigar is None:
+        return {'alignment_insertion_nt':None,'alignment_deletion_nt':None}
+    matches=list(re.finditer(r'(\\d+)([MIDNSHP=X])',cigar))
+    if not matches or ''.join(m.group(0) for m in matches)!=cigar:
+        return {'alignment_insertion_nt':None,'alignment_deletion_nt':None}
+    return {
+        'alignment_insertion_nt':sum(int(m.group(1)) for m in matches if m.group(2)=='I'),
+        'alignment_deletion_nt':sum(int(m.group(1)) for m in matches if m.group(2)=='D'),
+    }
+
+
 def map_genome(query,reference,species):
     executable=find_tool('minimap2')
     if executable is None:
@@ -74,7 +88,7 @@ def map_genome(query,reference,species):
                      'query_coverage':round((int(v[3])-int(v[2]))/qlen,4),
                      'query_start':int(v[2]),'query_end':int(v[3]),'query_length':qlen,
                      'identity_approx':round(int(v[9])/aligned,4) if aligned else 0,
-                     'mapq':int(v[11])})
+                     'mapq':int(v[11]),**cigar_gap_summary(v)})
     return sorted(hits,key=lambda h:h['identity_approx']*h['query_coverage'],reverse=True)
 
 def annotate(hits,gff_path):
