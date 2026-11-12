@@ -10,7 +10,7 @@ possible origin of protein-coding genes in *Drosophila* and relatives.
 ## What is implemented
 
 - Upload a target gene as DNA FASTA or supply a sequence/coordinates in a target
-  assembly; use available NCBI Datasets assemblies and GFF3 for up to five relatives.
+  assembly; use available NCBI Datasets assemblies and GFF3 for any chosen subset of up to 19 comparison species (the focal species plus the 19 others from the 20-species panel).
 - Map DNA with **minimap2**, retain mapping coordinates, coverage, identity,
   CDS-annotation overlap and assembly accessions.
 - Screen for additional non-overlapping loci, CDS exon structure, preliminary
@@ -27,6 +27,42 @@ possible origin of protein-coding genes in *Drosophila* and relatives.
   100 kb). These are **not** spliced CDS, confirmed ancestral coding states,
   frameshifts or verified translation.
 - Trace each analysis stage and show errors instead of suppressing missing evidence.
+
+## Published supplementary sequence file
+
+The supplied `supplementary_file_unannotated_alignments.fasta` (~53.9 MB) is a
+**nonstandard three-section research export**, NOT one aligned FASTA. It contains
+780 gene IDs and 17,011 entries per section (51,033 total), with 20 species
+codes. Sections:
+
+- I: `raw sequence for` — Cactus-selected genomic DNA fragments;
+- II: `spaln for` — spliced sequence predictions;
+- III: `genewise for` — independent spliced sequence predictions.
+
+Open `python -m streamlit run app.py`, choose `Peng & Zhao` data mode,
+upload the original `.fasta`, select **any** of the indexed 780 genes, select
+raw/Spaln/Genewise and any subset of 20 species, then click analyze. You can
+export only the selected sequences as **ordinary, unaligned FASTA** and use a
+separate appropriate alignment workflow. Do NOT upload the 53.9 MB source as
+an already aligned MSA or as the sequence of one gene. The repository does not
+need to contain a copy of this large dataset.
+
+The parser was corrected to respect all three sections, preserve header
+`score`/`shift` metadata, and avoid O(N×M) alignment on very long segments.
+Files matching the published layout are supported; no biological truth labels
+are inferred from author selection. See `CASE_FILE_GUIDE.md`.
+
+**How many species?** The old five-species NCBI panel was a prototype-only
+hard-coded implementation detail, not a scientific limit. `auto_app.py` now
+uses a **selectable 20-species study panel** (up to 19 relatives for one
+focal species). `app.py` studies all 20 codes already present in the
+supplementary extract without redownloading genomes. Large NCBI analyses
+consume substantial disk and compute; outgroup coverage matters more than
+maximizing the count.
+
+All stages have a selectable scientific annotation in the UI, including the
+question, implemented method, measured output, limitations and visualization.
+The source is `evogene/analysis_notes.py`.
 
 ## Visualizations
 
