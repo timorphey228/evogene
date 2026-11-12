@@ -8,6 +8,7 @@ from evogene.case_data import (
 )
 from evogene.ncbi_auto import PANEL, SPECIES_BY_CODE, analyze as auto_analyze
 from evogene.analysis_notes import annotations_for_report
+from evogene.scientific_report import analyze_case_batch, batch_as_markdown
 
 
 EXAMPLE = """Section I. Raw hits extracted from progressive cactus alignments
@@ -93,6 +94,54 @@ class CaseExtractTests(unittest.TestCase):
     def test_quadratic_guard(self):
         self.assertEqual(compare("A" * 5000, "T" * 5000)["comparison_status"],
                          "skipped_quadratic_cost")
+
+
+class MultiGeneScientificReportTests(unittest.TestCase):
+    def setUp(self):
+        self.folder = TemporaryDirectory()
+        self.path = Path(self.folder.name) / "article.fasta"
+        self.path.write_text(EXAMPLE, encoding="utf8")
+
+    def tearDown(self):
+        self.folder.cleanup()
+
+    def test_multiple_genes_six_requirements_and_traces(self):
+        batch = analyze_case_batch(
+            self.path, ["FBgn0000001", "FBgn0000002"],
+            method="raw", selected_species=["dsim"], source_name="article.fasta")
+        self.assertEqual(batch["gene_count"], 2)
+        self.assertEqual(batch["summary"]["requested"], 2)
+        self.assertEqual(batch["summary"]["completed"], 2)
+        self.assertEqual(batch["summary"]["failed"], 0)
+        self.assertEqual(len(batch["source"]["sha256"]), 64)
+        for entry in batch["results"]:
+            self.assertEqual(entry["conclusion"]["category"], "insufficient_data")
+            self.assertEqual(len(entry["case_requirements"]), 6)
+            self.assertTrue(entry["evidence"])
+            self.assertEqual(entry["phylogeny"]["status"], "not_assessed")
+            self.assertTrue(all("state" in x for x in entry["analysis_steps"]))
+            self.assertIn(entry["gene_id"], batch["raw_reports"])
+        self.assertIn("FBgn0000001", batch_as_markdown(batch))
+        self.assertIn("SHA-256", batch_as_markdown(batch))
+
+    def test_invalid_and_missing_ids_not_silently_claimed(self):
+        with self.assertRaises(ValueError):
+            analyze_case_batch(self.path, ["FBgn0000001", "FBgn0000001"])
+        with self.assertRaises(ValueError):
+            analyze_case_batch(self.path, ["bad;rm -rf"])
+        batch = analyze_case_batch(self.path, ["FBgn9999999"])
+        self.assertEqual(batch["summary"]["failed"], 1)
+        self.assertEqual(batch["summary"]["completed"], 0)
+        self.assertEqual(batch["errors"][0]["gene_id"], "FBgn9999999")
+
+    def test_predictions_are_not_called_true_frameshifts(self):
+        batch = analyze_case_batch(
+            self.path, ["FBgn0000001"], method="spaln", selected_species=["dsim"])
+        item = batch["results"][0]
+        all_evidence = str(item["evidence"])
+        self.assertIn("shift_yes_header_count", all_evidence)
+        self.assertIn("frameshift", str(item["conclusion"]))
+        self.assertEqual(item["conclusion"]["category"], "insufficient_data")
 
 
 class PanelTests(unittest.TestCase):
