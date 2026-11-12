@@ -10,7 +10,7 @@ possible origin of protein-coding genes in *Drosophila* and relatives.
 ## What is implemented
 
 - Upload a target gene as DNA FASTA or supply a sequence/coordinates in a target
-  assembly; use available NCBI Datasets assemblies and GFF3 for any chosen subset of up to 19 comparison species (the focal species plus the 19 others from the 20-species panel).
+  assembly; use available NCBI Datasets assemblies and GFF3 for any chosen subset of up to 20 comparison species (the focal species plus the 20 others from the 21-species panel, including Musca as an outgroup).
 - Map DNA with **minimap2**, retain mapping coordinates, coverage, identity,
   CDS-annotation overlap and assembly accessions.
 - Screen for additional non-overlapping loci, CDS exon structure, preliminary
@@ -54,8 +54,7 @@ are inferred from author selection. See `CASE_FILE_GUIDE.md`.
 
 **How many species?** The old five-species NCBI panel was a prototype-only
 hard-coded implementation detail, not a scientific limit. `auto_app.py` now
-uses a **selectable 20-species study panel** (up to 19 relatives for one
-focal species). `app.py` studies all 20 codes already present in the
+uses a **selectable 21-species panel** (20 comparative species plus the focal species; Musca is an additional outgroup). `app.py` studies all 20 codes already present in the
 supplementary extract without redownloading genomes. Large NCBI analyses
 consume substantial disk and compute; outgroup coverage matters more than
 maximizing the count.
@@ -80,10 +79,14 @@ case inputs) now expose interactive panels:
    as candidate coding potential.
 6. **Independent hypothesis evidence and uncertainty**: status, completeness,
    unassessed tests and processing failures, never forced 100%-sum scores.
-7. **Newick phylogeny visualization** with original node labels/branch lengths
-   on a genuinely supplied tree. EvoGene currently **does not perform ML
-   tree inference or calculate UFBoot/SH-aLRT**; these must come from
-   verified aligned homologs and an external phylogenetic workflow.
+7. **Automatic DNA-locus phylogeny + Newick** (new single-workflow dashboard).
+   MAFFT + IQ-TREE2 computes an unrooted ML tree, UFBoot and SH-aLRT
+   (1000 replicates); MAFFT alone enables an NJ tree with site bootstrap.
+   Without these tools the app can only offer explicitly marked
+   **exploratory unaligned 7-mer NJ clustering without branch support**.
+   A DNA locus tree is NOT by itself a proven ortholog/gene-family tree,
+   and absent reliable matches means no invented tree. Existing manual
+   Newick upload remains supported.
 
 The UI refuses to invent absent ORFs, ancestral sequences or trees.
 
@@ -121,8 +124,8 @@ Code: https://github.com/LiZhaoLab/DrosophilaDenovoGene
 
 ## Validation requirements / limitations
 
-Automated gene-tree inference, support values, careful ancestral-ORF
-reconstruction, robust sensitivity searches for deep protein homologs, formal
+Validated gene-family phylogeny for every candidate, calibrated Cactus/Genewise
+ancestral-coding classification, robust sensitivity searches for deep protein homologs, formal
 duplication/loss reconciliation and external biological benchmarking **remain
 open work**. Synthetic unit tests test software behavior, not biological accuracy.
 Review `ANALYSIS_PIPELINE.md`, `MECHANISM_V3.md` and tests for detailed scope.
@@ -181,3 +184,58 @@ A matching coordinate or a local DNA alignment is not sufficient to determine
 whether a gene arose by duplication, de novo emergence, or ancient divergence.
 In such cases the correct reported outcome is **insufficient data**, including
 which specific investigations are missing.
+
+
+## NEW: one-input multi-gene comparative-genomics workflow
+
+Use `streamlit run auto_app.py` (the canonical, redesigned interface):
+
+1. Upload **FASTA of one or more candidate genes**, e.g.
+   `>FBgn0040343` followed by valid A/C/G/T/N DNA (30–100000 nt).
+2. Choose the **focal species** and any relevant **comparison species**
+   from the 21-species catalogue. The published assembly accession is
+   pinned when available; any NCBI fallback is recorded transparently.
+   FlyBase r6.36 for D. melanogaster is NOT an NCBI RefSeq accession;
+   the app warns if the actual assembly differs from the study's version.
+3. Optional: add a **TE consensus library FASTA** to test candidate
+   transposable element sequence similarities. This does not replace
+   RepeatMasker/Dfam or whole-genome repeat annotation.
+4. Run the project. The workflow calls the existing NCBI Datasets +
+   minimap2 + GFF3 screening steps for each gene. It records additional
+   mapped loci, preliminary protein matches, approximate flank-based
+   synteny, candidate uninterrupted ORFs inside aligned syntenic
+   fragments, and independent mechanism tests.
+5. The pipeline extracts up to 21 observed nucleotide loci (one candidate
+   hit per comparison species). It builds **an observed, unrooted tree**
+   by MAFFT/IQ-TREE ML when installed. With MAFFT but no IQ-TREE, it
+   computes NJ with 100 site-bootstrap replicates. With neither, it
+   produces a clearly flagged exploratory k-mer NJ tree without
+   branch support. For fewer than 3 suitable sequences **no tree is
+   fabricated**. Even ML topology based on genomic loci is **not**
+   verified gene-family orthology.
+6. Inspect **per-gene hypotheses and argumentation**, candidate TE
+   hits if searched, DNA alignment/ORF/synteny charts, UTC timestamped
+   events, per-species assembly accessions, software versions,
+   errors and limitations.
+7. Download the entire project ZIP containing **JSON report, JSONL audit,
+   genuine Newick and MSA where calculated**. Persistent outputs are saved
+   in `results/evolutionary_pipeline/<run_id>/`.
+
+External dependencies for the automatic workflow:
+**NCBI datasets v2, minimap2** (required),
+**MAFFT and IQ-TREE2** (recommended, needed for robust tree reconstruction).
+Optional repeat library should be supplied for TE screening.
+Python requirements: `pip install -r requirements.txt`.
+
+### Scientific scope: paper analogue, not exact replication
+
+Peng & Zhao (Nature Communications 2024) used **Progressive Cactus,
+halLiftover, Genewise/Spaln calibrated coding predictions, all-vs-all
+BLASTp and jackhmmer/TBLASTN** to evaluate ancestral noncoding syntenic
+loci, distant homologs and candidate de novo age. The automatic EvoGene
+screen presently uses minimap2/flank-based synteny instead of HAL and
+a preliminary protein search, so it cannot independently establish
+definitive *de novo* origin, historical loss, phylogenetic duplication
+or the exact branch of origination. Its hypotheses are **diagnostic,
+not probabilities**. Run the published author pipeline and/or additional
+validated tools before making biological claims.
