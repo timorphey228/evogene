@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from evogene.case_data import (
-    sections, index_file, analyze, export_gene_fasta, header_info, compare
+    sections, index_file, analyze, analyze_many, export_gene_fasta, header_info, compare
 )
 from evogene.ncbi_auto import PANEL, SPECIES_BY_CODE, analyze as auto_analyze
 from evogene.analysis_notes import annotations_for_report
@@ -123,6 +123,18 @@ class MultiGeneScientificReportTests(unittest.TestCase):
             self.assertIn(entry["gene_id"], batch["raw_reports"])
         self.assertIn("FBgn0000001", batch_as_markdown(batch))
         self.assertIn("SHA-256", batch_as_markdown(batch))
+
+    def test_batch_extraction_equals_individual_analysis(self):
+        selected = ["FBgn0000001", "FBgn0000002"]
+        reports, errors = analyze_many(self.path, selected, method="spaln",
+                                       selected_species=["dsim"])
+        self.assertFalse(errors)
+        for gene_id in selected:
+            individual = analyze(self.path, gene_id, method="spaln",
+                                 selected_species=["dsim"])
+            self.assertEqual(reports[gene_id]["hits"], individual["hits"])
+            self.assertEqual(reports[gene_id]["method_comparison"],
+                             individual["method_comparison"])
 
     def test_invalid_and_missing_ids_not_silently_claimed(self):
         with self.assertRaises(ValueError):
