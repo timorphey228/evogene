@@ -50,8 +50,8 @@ class TreeTests(unittest.TestCase):
             Path(prefix+".treefile").write_text(
                 "((a:0.01,b:0.02)99/96:0.03,(c:0.04,d:0.05)98/94:0.06);")
             return SimpleNamespace(returncode=0,stderr="IQ-TREE successful",stdout="")
-        with patch("evogene.phylogeny.find_tool",side_effect=executable), \\
-             patch("evogene.phylogeny.subprocess.run",side_effect=fake_run):
+        with (patch("evogene.phylogeny.find_tool",side_effect=executable),
+              patch("evogene.phylogeny.subprocess.run",side_effect=fake_run)):
             result=infer_tree(rows,try_external=True)
         self.assertEqual(result["status"],"inferred")
         self.assertIn("maximum_likelihood",result["method"])
