@@ -11,6 +11,7 @@ from evogene.case_data import (
 from evogene.visualization import render_report_visualizations
 from evogene.analysis_notes import render_analysis_annotations
 from evogene.scientific_report import analyze_case_batch, batch_as_markdown
+from evogene.user_sequences import analyze_user_fastas
 
 st.set_page_config(page_title="EvoGene · ITMO case 2", layout="wide")
 st.title("EvoGene · эволюционное происхождение белок-кодирующих генов")
@@ -20,6 +21,7 @@ st.warning(
 )
 mode = st.radio("Источник данных", [
     "Локальные геномы FASTA + GFF3",
+    "Кандидатные гены + сравнительные FASTA",
     "Данные статьи Peng & Zhao: Cactus / Spaln / Genewise",
 ])
 if st.session_state.get("evo_active_mode") != mode:
@@ -104,6 +106,54 @@ if mode.startswith("Локальные"):
                     st.session_state.pop("case_export", None)
             except Exception as exc:
                 st.error(f"Ошибка анализа: {exc}")
+elif mode.startswith("Кандидатные"):
+    st.subheader("Собственные кандидатные гены и последовательности других видов")
+    st.write("Загрузите два обычных FASTA. В первом — один или несколько "
+             "кандидатных генов, во втором — сравнительные ДНК-последовательности. "
+             "Полные геномы и GFF3 для предварительного поиска сходства не обязательны.")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Формат кандидатных генов**")
+        st.code(">geneA|dmel\nATGAAACCCGGGTTTAAACCCGGGTTTTAA\n"
+                ">geneB|dmel\nATGAAGCCCGGGTATCCCGGGAAACCCCAA", language="text")
+        focal_file = st.file_uploader("Кандидатные гены (.fasta)",
+                                       type=["fasta", "fa", "fna"], key="user_focal")
+    with right:
+        st.markdown("**Формат сравнений**")
+        st.code(">geneA|dsim|locus1\nATGAAACCCGGGTTTAAACCCGGGTTTTAA\n"
+                ">geneB|dyak|locus2\nATGAAGCCCGGGTATCCCGGGAAACCCCAA",
+                language="text")
+        relative_file = st.file_uploader("Сравнительные последовательности (.fasta)",
+                                          type=["fasta", "fa", "fna"], key="user_related")
+    st.caption("Заголовки сравнений: >ID_гена|вид|локус. "
+               "Совпадения между короткими последовательностями не доказывают "
+               "ортологию, дупликацию или de novo происхождение.")
+    if focal_file is not None and relative_file is not None:
+        from hashlib import sha256
+        signature = (sha256(focal_file.getvalue()).hexdigest(),
+                     sha256(relative_file.getvalue()).hexdigest())
+        if st.session_state.get("evo_user_signature") != signature:
+            st.session_state.pop("evo_batch", None)
+            st.session_state.pop("evo_result", None)
+            st.session_state["evo_user_signature"] = signature
+        if st.button("Анализировать мои гены", type="primary"):
+            try:
+                batch = analyze_user_fastas(
+                    focal_file.getvalue(), relative_file.getvalue(),
+                    focal_filename=focal_file.name,
+                    relative_filename=relative_file.name,
+                )
+                st.session_state["evo_batch"] = batch
+                st.session_state["evo_result"] = batch["raw_reports"][
+                    batch["requested_gene_ids"][0]]
+                st.session_state.pop("case_export", None)
+            except (ValueError, OSError, UnicodeError) as exc:
+                st.error("Ошибка чтения пользовательских последовательностей: " + str(exc))
+    else:
+        st.session_state.pop("evo_batch", None)
+        st.session_state.pop("evo_result", None)
+        st.info("Для этого режима необходимы оба FASTA-файла.")
+
 else:
     st.markdown(
         "Файл `supplementary_file_unannotated_alignments.fasta` содержит "
@@ -197,7 +247,7 @@ else:
                 "не заменяет реальных последовательностей.")
 
 batch = st.session_state.get("evo_batch")
-if batch and mode.startswith("Данные статьи"):
+if batch and (mode.startswith("Данные статьи") or mode.startswith("Кандидатные")):
     st.divider()
     st.header("Итоговый результат по требованиям кейса")
     summary = batch["summary"]
@@ -206,8 +256,14 @@ if batch and mode.startswith("Данные статьи"):
     c2.metric("Генов обработано", summary["completed"])
     c3.metric("Не удалось обработать", summary["failed"])
     if batch["errors"]:
-        st.error("Ошибки отдельных генов не скрываются.")
+        st.warning("Замечания и ошибки отдельных входных записей не скрываются.")
         st.dataframe(batch["errors"], use_container_width=True, hide_index=True)
+    unmatched = summary.get("unmatched_comparison_headers", [])
+    if unmatched:
+        st.warning(f"В сравнительном FASTA обнаружено {len(unmatched)} записей "
+                   "для генов, отсутствующих в кандидатном FASTA.")
+        with st.expander("Неиспользованные сравнительные записи"):
+            st.write(unmatched[:100])
     table = [{
         "Ген": entry["gene_id"],
         "Механизм происхождения": entry["conclusion"]["label"],
@@ -245,7 +301,7 @@ if batch and mode.startswith("Данные статьи"):
                    + batch["source"]["sha256"] + " | метод: "
                    + batch["source"]["method"])
         st.session_state["evo_result"] = batch["raw_reports"][selected_gene]
-        if st.session_state.get("evo_case_export_gene") != selected_gene:
+        if mode.startswith("Данные статьи") and st.session_state.get("evo_case_export_gene") != selected_gene:
             if file is not None:
                 with tempfile.NamedTemporaryFile(suffix=".fasta") as temp:
                     temp.write(file.getvalue())
