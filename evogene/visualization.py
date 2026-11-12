@@ -201,24 +201,49 @@ def render_report_visualizations(report):
             st.caption("Предварительно отобранные Cactus-фрагменты: локальная "
                        "идентичность и покрытие. Это не независимый поиск "
                        "гомологов в целых геномах.")
+            measured = [hit for hit in report["hits"] if
+                        hit.get("comparison_status") == "aligned" and
+                        hit.get("identity_aligned") is not None]
+            skipped = len(report["hits"]) - len(measured)
             rows = [{
                 "species": hit.get("species_abbr", "?"),
-                "identity": round(100 * float(hit.get("identity_aligned", 0)), 2),
-                "coverage": round(100 * float(hit.get("query_coverage", 0)), 2),
+                "identity": round(100 * float(hit["identity_aligned"]), 2),
+                "coverage": round(100 * float(hit["query_coverage"]), 2),
                 "kind": hit.get("header_kind", "unknown"),
                 "header": hit.get("header", ""),
-            } for hit in report["hits"]]
-            chart = alt.Chart(alt.Data(values=rows)).mark_circle(size=95).encode(
-                x=alt.X("coverage:Q", title="Покрытие запроса, %", scale=alt.Scale(domain=[0, 100])),
-                y=alt.Y("identity:Q", title="Идентичность выровненных позиций, %",
-                        scale=alt.Scale(domain=[0, 100])),
-                color=alt.Color("kind:N", title="Тип Cactus-записи"),
-                tooltip=["species:N", "header:N", "coverage:Q", "identity:Q"],
-            ).properties(height=300).interactive()
-            st.altair_chart(chart, use_container_width=True)
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            } for hit in measured]
+            if skipped:
+                st.warning(f"Для {skipped} записей локальное сравнение не завершено "
+                           "или остановлено из-за размера. Они НЕ являются нулевыми совпадениями.")
+            if rows:
+                chart = alt.Chart(alt.Data(values=rows)).mark_circle(size=95).encode(
+                    x=alt.X("coverage:Q", title="Покрытие запроса, %", scale=alt.Scale(domain=[0, 100])),
+                    y=alt.Y("identity:Q", title="Идентичность выровненных позиций, %",
+                            scale=alt.Scale(domain=[0, 100])),
+                    color=alt.Color("kind:N", title="Тип записи из файла"),
+                    tooltip=["species:N", "header:N", "coverage:Q", "identity:Q"],
+                ).properties(height=300).interactive()
+                st.altair_chart(chart, use_container_width=True)
+                st.dataframe(rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("Нет рассчитанных локальных сравнений для отображения.")
         else:
             st.info("Блоков выравнивания нет или формат не содержит координат запроса.")
+        if report.get("method_comparison"):
+            st.markdown("**Сопоставление трёх методов на одном гене**")
+            methods = report["method_comparison"]
+            quantitative = [row for row in methods if row.get("median_nt") is not None]
+            if quantitative:
+                chart = alt.Chart(alt.Data(values=quantitative)).mark_bar().encode(
+                    x=alt.X("method:N", title="Секция/алгоритм"),
+                    y=alt.Y("median_nt:Q", title="Медианная длина последовательности, нт"),
+                    color=alt.Color("method:N", title="Метод"),
+                    tooltip=["method:N", "records:Q", "species:Q", "median_nt:Q",
+                             "coordinate_hits:Q", "shift_yes:Q", "shift_unknown:Q"],
+                ).properties(height=230)
+                st.altair_chart(chart, use_container_width=True)
+            st.caption("Raw Cactus и Spaln/Genewise обрабатываются независимо: "
+                       "сходство полученных длин не является доказательством кодирования.")
         st.markdown("**Посимвольное множественное выравнивание (отдельный файл)**")
         msa_upload = st.file_uploader("Загрузить готовое выравнивание FASTA с пропусками",
                                       type=["fa", "fasta", "fas", "aln"], key="evo_msa")
