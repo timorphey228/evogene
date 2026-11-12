@@ -41,35 +41,55 @@ def index_upload(data: bytes):
 
 
 if mode.startswith("Локальные"):
-    st.caption("Здесь выполняется проверка двух вручную заданных сравнительных геномов. "
-               "Для более широкого набора до 19 видов используйте auto_app.py; "
-               "для полного Cactus-набора — второй режим.")
+    st.caption("Ручной режим: любое число самостоятельно предоставленных геномов "
+               "FASTA/GFF3. Для автоматической загрузки до 19 родственников "
+               "используйте auto_app.py.")
     gene = st.text_input("Идентификатор гена из GFF3", value="FBgn0040343")
     tf = st.file_uploader("Целевой геном FASTA", key="target_fasta")
     tg = st.file_uploader("GFF3 целевого генома", key="target_gff")
-    s1 = st.text_input("Первый родственный вид", value="Drosophila simulans")
-    r1 = st.file_uploader("FASTA первого вида", key="relative1")
-    g1 = st.file_uploader("GFF3 первого вида (необязательно)", key="relative1_gff")
-    s2 = st.text_input("Второй родственный вид", value="Drosophila yakuba")
-    r2 = st.file_uploader("FASTA второго вида", key="relative2")
-    g2 = st.file_uploader("GFF3 второго вида (необязательно)", key="relative2_gff")
+    relative_fastas = st.file_uploader(
+        "Сравнительные геномы FASTA (можно загрузить несколько)",
+        type=["fasta", "fa", "fna", "gz"],
+        accept_multiple_files=True, key="relative_genomes",
+    )
+    relative_gffs = st.file_uploader(
+        "GFF3 сравниваемых видов (по желанию)",
+        type=["gff", "gff3", "gz"],
+        accept_multiple_files=True, key="relative_annotations",
+    )
+    relatives_ui = []
+    for i, uploaded in enumerate(relative_fastas or []):
+        proposed = uploaded.name.rsplit(".", 1)[0].replace("_", " ")
+        species_name = st.text_input(
+            f"Название вида для {uploaded.name}",
+            value=proposed, key=f"local_species_{i}",
+        )
+        gff_options = [None] + list(range(len(relative_gffs or [])))
+        gff_idx = st.selectbox(
+            f"GFF3 для {species_name} (необязательно)",
+            options=gff_options, key=f"local_gff_{i}",
+            format_func=lambda j: "Нет аннотации" if j is None else relative_gffs[j].name,
+        )
+        relatives_ui.append((species_name, uploaded,
+                             relative_gffs[gff_idx] if gff_idx is not None else None))
+    st.caption("Вид вводится явно, не выводится из имени FASTA автоматически. "
+               "Каждый геном сравнивается отдельно; выбор большого числа "
+               "сборок увеличивает расход памяти и вычислений.")
     if st.button("Анализировать локальные сборки"):
-        if not all((tf, tg, r1)):
-            st.error("Нужны целевые FASTA/GFF3 и как минимум один сравнительный FASTA.")
+        if not tf or not tg or not relatives_ui:
+            st.error("Нужны целевые FASTA/GFF3 и хотя бы один сравнительный FASTA.")
+        elif any(not name.strip() for name, _, _ in relatives_ui):
+            st.error("Не оставляйте названия видов пустыми.")
+        elif len({name.strip() for name, _, _ in relatives_ui}) != len(relatives_ui):
+            st.error("Названия сравнительных видов должны быть уникальными.")
         else:
             try:
                 with tempfile.TemporaryDirectory() as folder:
                     relatives = [{
-                        "species": s1,
-                        "fasta": save_upload(r1, folder),
-                        "gff": save_upload(g1, folder),
-                    }]
-                    if r2:
-                        relatives.append({
-                            "species": s2,
-                            "fasta": save_upload(r2, folder),
-                            "gff": save_upload(g2, folder),
-                        })
+                        "species": name.strip(),
+                        "fasta": save_upload(file, folder),
+                        "gff": save_upload(gff, folder),
+                    } for name, file, gff in relatives_ui]
                     st.session_state["evo_result"] = analyze_genomes(
                         save_upload(tf, folder),
                         save_upload(tg, folder), gene, relatives,
