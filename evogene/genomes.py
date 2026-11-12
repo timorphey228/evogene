@@ -142,10 +142,16 @@ def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
     for r in relatives:
         try:
             synteny_evidence[r['species']]=assess_synteny(
-                flanks,out[r['species']],r['fasta'],r['species'])
+                flanks,out[r['species']],r['fasta'],r['species'],
+                query=query,gff_path=r.get('gff'))
         except (OSError,RuntimeError,ValueError,subprocess.TimeoutExpired) as exc:
             origin_screen_errors.append(r['species']+': '+str(exc))
+    from .orf import find_orfs
+    scan = len(query) <= 100_000
     result={'gene_id':gene_id,'input_type':'whole_genome_fasta_gff3',
+            'query_orfs':[o.to_dict() for o in find_orfs(query,min_aa=25)[:80]] if scan else [],
+            'orf_note':'Candidate ORFs in unspliced genomic interval; not evidence of ancestral coding.',
+            'phylogeny':{'status':'not_assessed','reason':'Phylogenetic tree not inferred from genomic mappings.'},
             'target':{'chrom':feature['chrom'],'start_0based':feature['start'],
             'end_0based':feature['end'],'length_nt':len(query)},
             'hypothesis':hyp,'explanation':explanation,'relatives':out,'extra_target_copies':extras,
