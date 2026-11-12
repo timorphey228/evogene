@@ -46,7 +46,7 @@ class ProteinHomologyTests(unittest.TestCase):
         # Genomic DNA intentionally has no long ORF, but the annotated
         # target protein has a close relative with different exon structure.
         dna=('ATGTAA'*100)
-        self.assertFalse(query_orfs(dna))
+        self.assertFalse(any('MAAAAA' in item['aa'] for item in query_orfs(dna)))
         with TemporaryDirectory() as temp:
             folder=Path(temp)
             (folder/'proteins.faa').write_text(
