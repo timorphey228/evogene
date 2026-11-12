@@ -55,7 +55,9 @@ def evidence_for_case(report):
         {
             "id": "observed_comparative_records",
             "type": "observation",
-            "description": "Записи других видов для данного гена в выбранной секции",
+            "description": ("Пользовательские сравнительные последовательности"
+                            if report.get("input_type") == "user_supplied_fasta_sequences"
+                            else "Записи других видов для данного гена в выбранной секции"),
             "value": {
                 "records": len(hits),
                 "species": sorted({h.get("species_abbr") for h in hits
@@ -63,7 +65,9 @@ def evidence_for_case(report):
                 "annotated_identifier_species": annotated,
                 "genomic_coordinate_species": coordinate,
             },
-            "source": "FASTA headers in " + report.get("method", "unknown"),
+            "source": ("Заголовки пользовательского сравнительного FASTA"
+                       if report.get("input_type") == "user_supplied_fasta_sequences"
+                       else "FASTA headers in " + report.get("method", "unknown")),
             "interpretation": "Отобранные сравнительные последовательности доступны для проверки.",
             "does_not_prove": "Функцию белка, ортологию, паралогию или de novo происхождение.",
         },
@@ -81,7 +85,7 @@ def evidence_for_case(report):
                                "comparison": "Biopython local PairwiseAligner",
                                "alignment_cost_guard_cells": 2_000_000},
             },
-            "source": "Per-hit local DNA alignment computed by EvoGene",
+            "source": "Попарное локальное ДНК-выравнивание, вычисленное EvoGene",
             "interpretation": "Есть измеримые совпадения между выбранными фрагментами.",
             "does_not_prove": "Независимый полно-геномный поиск гомологов и эволюционное событие.",
         },
@@ -104,12 +108,15 @@ def evidence_for_case(report):
             "does_not_prove": "Появление/потерю экзона или подтверждённый сдвиг рамки.",
         },
     ]
+    if not method_rows:
+        evidence = [e for e in evidence if e["id"] != "three_independent_sections"]
     return evidence
 
 
 def make_case_gene_result(report, provenance):
     """Transparent conclusion: no definitive mechanism from these inputs alone."""
     gene_id = report["gene_id"]
+    is_user = report.get("input_type") == "user_supplied_fasta_sequences"
     evidence = evidence_for_case(report)
     missing = [
         "Независимый поиск белковых и геномных гомологов за пределами заранее отобранных Cactus-хитов.",
@@ -120,7 +127,7 @@ def make_case_gene_result(report, provenance):
     ]
     observed = {
         "gene_id": gene_id,
-        "focal_species": "dmel",
+        "focal_species": report.get("focal_species", "dmel"),
         "reference_sequence_length_nt": report.get("target_length_nt"),
         "selected_method": report.get("method"),
         "comparison_species_with_records": sorted({
@@ -131,14 +138,17 @@ def make_case_gene_result(report, provenance):
     }
     stages = [
         {"stage": "input", "state": "completed",
-         "observation": f"Выбран ген {gene_id} из опубликованного набора Cactus/Spaln/Genewise"},
+         "observation": (f"Выбран ген {gene_id} из FASTA пользователя" if is_user
+                         else f"Выбран ген {gene_id} из набора Cactus/Spaln/Genewise")},
         {"stage": "comparative_sequence_retrieval", "state": "completed",
          "observation": f"Отобрано {len(report.get('hits', []))} сравнительных записей"},
         {"stage": "local_dna_alignment", "state": "partial" if
          (report.get("summary") or {}).get("comparison_skipped") else "completed",
          "observation": "Измерены локальная идентичность и покрытие; отдельные слишком большие сравнения могли быть пропущены"},
-        {"stage": "cross_method_comparison", "state": "completed",
-         "observation": "Сопоставлены Raw Cactus, Spaln и Genewise без объединения последовательностей"},
+        {"stage": "cross_method_comparison", "state": ("not_assessed" if is_user else "completed"),
+         "observation": ("В пользовательском FASTA нет трёх опубликованных методов"
+                         if is_user else
+                         "Сопоставлены Raw Cactus, Spaln и Genewise без объединения последовательностей")},
         {"stage": "protein_homology_validation", "state": "not_assessed",
          "observation": "Независимый BLASTp/TBLASTN/HMMER-поиск не выполнялся"},
         {"stage": "ancestral_state_reconstruction", "state": "not_assessed",
@@ -154,10 +164,14 @@ def make_case_gene_result(report, provenance):
         "confidence": "not_assessed",
         "not_a_probability": True,
         "why": (
-            "В файле присутствуют заранее отобранные сравнительные участки, "
-            "но отсутствует независимая проверка геномной и белковой гомологии, "
-            "предковые кодирующие состояния и надёжное дерево генов. "
-            "Данные позволяют исследовать кандидатов, но не доказать конкретный механизм."
+            ("Пользователь предоставил кандидатные гены и сравнительные ДНК-последовательности, "
+             "но для определения происхождения не хватает проверенных ортологов, "
+             "геномного окружения, предкового кодирующего состояния и дерева генов."
+             if is_user else
+             "В файле присутствуют заранее отобранные сравнительные участки, "
+             "но отсутствует независимая проверка геномной и белковой гомологии, "
+             "предковые кодирующие состояния и надёжное дерево генов. "
+             "Данные позволяют исследовать кандидатов, но не доказать конкретный механизм.")
         ),
         "hypotheses_not_resolved": ["de_novo", "duplication", "ancient_origin",
                                      "other_mechanism"],
@@ -170,7 +184,9 @@ def make_case_gene_result(report, provenance):
     }
     criteria = [
         {"number": 1, "title": "Приём генов и сравнительных данных", "status": "met",
-         "evidence": "FASTA разделён на целевую последовательность dmel и сравнения других видов"},
+         "evidence": ("Приняты отдельные кандидатные гены и сравнительные FASTA"
+                      if is_user else
+                      "FASTA разделён на целевую последовательность dmel и сравнения других видов")},
         {"number": 2, "title": "Автоматизированный анализ нескольких генов", "status": "met_in_batch",
          "evidence": "Несколько генов обрабатываются отдельно с объединённым отчётом"},
         {"number": 3, "title": "Механизм происхождения либо недостаточность данных", "status": "met_with_uncertainty",
