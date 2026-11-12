@@ -25,6 +25,7 @@ from Bio import SeqIO
 from . import ncbi_auto
 from .genomes import map_genome
 from .phylogeny import infer_report_tree
+from .syntenic_orf import survey_syntenic_orfs
 
 
 def utcnow():
@@ -210,7 +211,7 @@ def run_project(fasta_input, focal_species, comparison_species, *,
     genes=candidate_records(fasta_input)
     run_id=uuid.uuid4().hex[:12]
     started=utcnow()
-    root=Path(output_folder) if output_folder is not None else None
+    root=Path(output_folder)/run_id if output_folder is not None else None
     if root is not None:
         root.mkdir(parents=True,exist_ok=True)
     audit=[]
@@ -218,6 +219,7 @@ def run_project(fasta_input, focal_species, comparison_species, *,
     summary={
         "schema":"evogene-comparative-pipeline-v1",
         "run_id":run_id, "started_at_utc":started,
+        "output_folder":str(root) if root is not None else None,
         "input_sha256":sha256(input_bytes).hexdigest(),
         "focal_species":focal_species,
         "requested_comparison_species":species,
@@ -257,6 +259,13 @@ def run_project(fasta_input, focal_species, comparison_species, *,
             core=ncbi_auto.analyze(
                 "",focal_species,gene_id,gene_sequence=gene["dna"],
                 relative_species=species,cache=cache,progress=callback)
+            log(gene_id,"syntenic_orf","running",
+                "Survey candidate ORFs only inside observed syntenic DNA hits")
+            orfs = survey_syntenic_orfs(core)
+            core["syntenic_orf_evidence"] = orfs
+            log(gene_id,"syntenic_orf","completed",
+                f"{sum(x.get('status')=='screened_genomic_fragment' for x in orfs.values())} "
+                f"syntenic fragments surveyed; never inferred ancestral coding status")
             log(gene_id,"phylogeny","running","Extract genomic locus sequences for available species")
             if infer_phylogeny:
                 tree=infer_report_tree(gene["dna"],core)
@@ -284,6 +293,7 @@ def run_project(fasta_input, focal_species, comparison_species, *,
                 "hypotheses":inference,
                 "phylogeny":tree,
                 "transposable_elements":te,
+                "syntenic_orf_evidence":orfs,
                 "evidence":core,
                 "limitations":[
                     "This is not a literal reproduction of Cactus/HAL/Spaln/Genewise.",
