@@ -4,6 +4,7 @@ from pathlib import Path
 import streamlit as st
 from evogene.genomes import analyze as analyze_genomes
 from evogene.case_data import analyze as analyze_case
+from evogene.visualization import render_report_visualizations
 
 st.set_page_config(page_title='EvoGene v2',layout='wide')
 st.title('EvoGene · происхождение белок-кодирующих генов')
@@ -49,6 +50,8 @@ else:
             except Exception as ex:st.error(str(ex))
 if 'evo_result' in st.session_state:
     result=st.session_state['evo_result']
+    render_report_visualizations(result)
+    st.divider()
     st.subheader(result['gene_id']+' — '+result['hypothesis'])
     st.write(result['explanation'])
     if 'hits' in result:st.dataframe(result['hits'],use_container_width=True)
