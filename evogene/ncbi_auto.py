@@ -240,7 +240,9 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
             assembly=download(species,cache)
             selected.append(assembly)
             emit('download','completed',
-                 f"accession={assembly['accession']}; GFF3={'да' if assembly['gff'] else 'нет'}; cached={assembly.get('cached',False)}",species)
+                 f"accession={assembly['accession']}; expected={assembly.get('reference_expected')}; "
+                 f"study_match={assembly.get('reference_matches_study')}; "
+                 f"GFF3={'да' if assembly['gff'] else 'нет'}; cached={assembly.get('cached',False)}",species)
             emit('dna_alignment','running','minimap2: ген → геном',species)
             matches=map_genome(query,assembly['fasta'],species)
             emit('dna_alignment','completed',f'Выравниваний: {len(matches)}',species)
@@ -261,8 +263,13 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     try:
         emit('target_reference','running','Поиск исходного референсного генома')
         focal=download(target_species,cache)
-        focal_reference={'species':target_species,'accession':focal['accession'],
-                         'annotation_available':bool(focal['gff'])}
+        focal_reference={
+            'species':target_species,'accession':focal['accession'],
+            'annotation_available':bool(focal['gff']),
+            'source':focal.get('source'),
+            'reference_expected':focal.get('reference_expected'),
+            'reference_matches_study':focal.get('reference_matches_study'),
+        }
         emit('target_reference','completed',
              f"accession={focal['accession']}; GFF3={'да' if focal['gff'] else 'нет'}")
         emit('target_mapping','running','Картирование гена на собственный геном')
