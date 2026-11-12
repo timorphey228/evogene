@@ -1,0 +1,4 @@
+gene_id,species,paralog_detected,distant_coding_homolog,syntenic_outgroup_locus,outgroup_locus_noncoding,homolog_search_completed,rearrangement_evidence,outgroup_count,alignment_identity,notes
+FBgn0040784,Drosophila melanogaster,no,no,yes,yes,yes,no,3,0.81,SYNTHETIC teaching example; NOT experimentally verified
+FBgn0025616,Drosophila melanogaster,yes,no,yes,no,yes,no,2,0.68,SYNTHETIC duplication case; NOT actual evidence for this gene
+FBgn0040343,Drosophila melanogaster,unknown,unknown,unknown,unknown,no,unknown,0,,SYNTHETIC missing-data control
