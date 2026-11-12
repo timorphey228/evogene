@@ -30,6 +30,8 @@ def alignment_blocks(report, limit=400):
                 "coverage": round(100 * float(hit.get("query_coverage", 0)), 2),
                 "annotation": hit.get("coding_overlap", "annotation_unknown"),
                 "mapq": hit.get("mapq"),
+                "alignment_insertion_nt": hit.get("alignment_insertion_nt"),
+                "alignment_deletion_nt": hit.get("alignment_deletion_nt"),
             })
     return sorted(rows, key=lambda x: (x["species"], x["start"], -x["coverage"]))[:limit]
 
@@ -73,6 +75,24 @@ def orf_blocks(report):
             "start": int(item["start"]), "end": int(item["end"]),
             "aa_length": int(item["aa_length"]), "strand": item["strand"],
         })
+    return rows
+
+
+def alignment_gap_rows(report):
+    """CIGAR I/D base counts are mapper operations, not inferred mutations."""
+    rows = []
+    for species, hits in (report.get("relatives") or {}).items():
+        for hit in hits[:20]:
+            for feature, key in (
+                ("I (query relative to reference)", "alignment_insertion_nt"),
+                ("D (query relative to reference)", "alignment_deletion_nt"),
+            ):
+                count = hit.get(key)
+                if count is not None:
+                    rows.append({
+                        "species": species, "operation": feature, "bases": int(count),
+                        "chrom": hit.get("chrom", "?"), "mapq": hit.get("mapq"),
+                    })
     return rows
 
 
@@ -135,7 +155,7 @@ def newick_to_dot(newick, *, max_tips=200):
         else:
             # Confidence belongs to the node in Newick; its statistical
             # interpretation depends on the program that built the tree.
-            label = "" if node.confidence is None else f"{node.confidence:g}"
+            label = (str(node.name) if node.name else "") if node.confidence is None else f"{node.confidence:g}"
             shape = "circle"
         lines.append(f'{node_id} [label={json.dumps(str(label))},shape={shape}];')
         for child in node.clades:
@@ -159,8 +179,8 @@ def render_report_visualizations(report):
     st.header("Визуальный анализ доказательств")
     st.caption("Изображены только результаты измерений или отдельно загруженные данные. "
                "DNA-сходство не доказывает ортологию или эволюционное происхождение.")
-    tab_align, tab_synteny, tab_orf, tab_mechanisms, tab_tree = st.tabs([
-        "Выравнивания", "Синтения", "ORF", "Гипотезы и неопределённость", "Филогения"
+    tab_align, tab_synteny, tab_orf, tab_gap, tab_mechanisms, tab_tree = st.tabs([
+        "Выравнивания", "Синтения", "ORF", "Вставки/делеции", "Гипотезы и неопределённость", "Филогения"
     ])
     with tab_align:
         hits = alignment_blocks(report)
@@ -242,6 +262,23 @@ def render_report_visualizations(report):
         st.caption(report.get("orf_note",
             "ORF показывает потенциальное кодирование непрерывной ДНК. "
             "Не является подтверждением транскрипции, трансляции или предкового ORF."))
+    with tab_gap:
+        rows = alignment_gap_rows(report)
+        st.caption("Это операции I и D в CIGAR выравнивания minimap2. "
+                   "Они не являются сами по себе эволюционными инделами, "
+                   "доказательствами потери гена или сдвига рамки считывания. "
+                   "Для этого нужна реконструкция ортологичной CDS и предкового состояния.")
+        if rows:
+            chart = alt.Chart(alt.Data(values=rows)).mark_bar().encode(
+                x=alt.X("species:N", title="Вид"),
+                y=alt.Y("sum(bases):Q", title="Сумма нуклеотидов в операциях"),
+                color=alt.Color("operation:N", title="CIGAR"),
+                tooltip=["species:N", "operation:N", "sum(bases):Q"],
+            ).properties(height=280)
+            st.altair_chart(chart, use_container_width=True)
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+        else:
+            st.info("CIGAR операции не предоставлены. Геномные инделы не реконструированы.")
     with tab_mechanisms:
         rows = mechanism_rows(report)
         if rows:
