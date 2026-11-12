@@ -97,7 +97,7 @@ def parse_aligned_fasta(text, *, max_sequences=80, max_columns=20000):
     length = len(sequences[0][1])
     if not length or length > max_columns or any(len(seq) != length for _, seq in sequences):
         raise ValueError("FASTA must contain equally long aligned sequences (with gaps)")
-    if any(ch not in "ACGTUNRYKMSWBDHV-.X*" for _, seq in sequences for ch in seq):
+    if any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ-.X*" for _, seq in sequences for ch in seq):
         raise ValueError("Unexpected residue/character in alignment")
     if len({name for name, _ in sequences}) != len(sequences):
         raise ValueError("Sequence identifiers must be unique")
@@ -120,7 +120,7 @@ def newick_to_dot(newick, *, max_tips=200):
     from Bio import Phylo
     tree = Phylo.read(StringIO(newick), "newick")
     tips = tree.get_terminals()
-    if not tips or len(tips) > max_tips:
+    if not tips or all(t.name is None for t in tips) or len(tips) > max_tips:
         raise ValueError(f"Newick needs 1–{max_tips} tips")
     lines = ["digraph Tree {", 'graph [rankdir=LR, bgcolor="transparent"];',
              'node [fontname="Arial",fontsize=10];', 'edge [color="#94A3B8"];']
@@ -293,5 +293,5 @@ def render_report_visualizations(report):
                 st.graphviz_chart(dot, use_container_width=True)
                 st.download_button("Экспортировать Newick", tree_file.getvalue(),
                     file_name="uploaded_gene_tree.nwk", mime="text/plain")
-            except (UnicodeDecodeError, ValueError, TypeError, AttributeError) as exc:
+            except (UnicodeDecodeError, ValueError, TypeError, AttributeError, IndexError) as exc:
                 st.error(f"Некорректное дерево: {exc}")
