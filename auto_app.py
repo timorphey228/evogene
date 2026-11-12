@@ -3,10 +3,20 @@ import json,tempfile,re
 from pathlib import Path
 import streamlit as st
 from evogene.ncbi_auto import PANEL,analyze
+from evogene.tools import check_tools
 st.set_page_config(page_title='EvoGene Auto NCBI',layout='wide')
 st.title('EvoGene — автоматическая загрузка геномов NCBI')
 st.caption('Вы загружаете только свой FASTA. Сравнительные геномы и доступные GFF3 скачиваются автоматически.')
 st.warning('FASTA полного генома не содержит названия и координат генов. Нужно ввести последовательность гена либо координаты. Это не доказательство de novo.')
+st.subheader('Проверка инструментов на этом Mac')
+tools_status=check_tools()
+for name, status in tools_status.items():
+    if status['ok']:
+        st.success(f"{name}: {status['path']} — {status['detail'][:100]}")
+    else:
+        st.error(f"{name}: {status['detail']}")
+if not all(status['ok'] for status in tools_status.values()):
+    st.info('Анализ недоступен, пока оба инструмента не запускаются. PATH не требуется настраивать вручную, если программы находятся в стандартных папках.')
 f=st.file_uploader('Целевой геном FASTA или FASTA одного гена',type=['fa','fna','fasta','gz'])
 species=st.selectbox('Целевой вид',list(PANEL))
 gene=st.text_input('ID выбранного гена (подпись отчёта)',value='FBgn0040343')
@@ -21,7 +31,8 @@ elif method=='Указать координаты':
     start=c1.number_input('Начало (с 1)',min_value=1,value=1)
     end=c2.number_input('Конец (включительно)',min_value=1,value=1000)
     strand=c3.selectbox('Цепь',['+','-'])
-if st.button('Скачать геномы NCBI и запустить анализ',type='primary'):
+if st.button('Скачать геномы NCBI и запустить анализ',type='primary',
+             disabled=not all(status['ok'] for status in tools_status.values())):
     if not f:st.error('Загрузите FASTA')
     else:
         with tempfile.TemporaryDirectory() as tmp:

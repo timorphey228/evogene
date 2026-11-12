@@ -3,6 +3,7 @@ from dataclasses import dataclass,asdict
 import gzip, subprocess, shutil, tempfile
 from pathlib import Path
 from .origin_tests import distribute
+from .tools import find_tool
 
 def lines(path):
     return gzip.open(path,'rt') if str(path).endswith('.gz') else open(path,encoding='utf8')
@@ -52,12 +53,13 @@ def gene_region(fasta_path,gff_path,gene_id):
     raise ValueError('GFF chromosome not present in target FASTA')
 
 def map_genome(query,reference,species):
-    if shutil.which('minimap2') is None:
-        raise RuntimeError('Install minimap2 first (macOS: brew install minimap2)')
+    executable=find_tool('minimap2')
+    if executable is None:
+        raise RuntimeError('minimap2 не найден. Проверены PATH, ~/bin, /opt/homebrew/bin и /usr/local/bin.')
     with tempfile.TemporaryDirectory() as temp:
         p=Path(temp)/'query.fa'
         p.write_text('>query\n'+query+'\n')
-        cp=subprocess.run((['minimap2'] + (['-x','asm20'] if len(query)>=1000 else
+        cp=subprocess.run(([executable] + (['-x','asm20'] if len(query)>=1000 else
                             ['-k','11','-w','5','-m','20','-n','2']) +
                            ['-c','--secondary=yes','-N','10',str(reference),str(p)]),text=True,capture_output=True,timeout=600)
     if cp.returncode: raise RuntimeError('minimap2: '+cp.stderr[-500:])

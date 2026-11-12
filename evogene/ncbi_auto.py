@@ -7,6 +7,7 @@ import json, re, shutil, subprocess, zipfile
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
 from .origin_tests import distribute
+from .tools import find_tool
 from .genome_probes import discover_target_locus, focal_flanks, assess_synteny
 
 def fasta_iter(path):
@@ -29,8 +30,10 @@ PANEL={
 CASE={'Drosophila simulans':'GCF_000754195.2','Drosophila sechellia':'GCF_004382195.1','Drosophila yakuba':'GCF_000005975.2','Drosophila erecta':'GCF_003286155.1','Drosophila ananassae':'GCF_003285975.2'}
 
 def command(args,timeout=180):
-    if not shutil.which('datasets'):raise RuntimeError('NCBI datasets CLI is not in PATH: install it from NCBI and verify `datasets version`. On macOS add ~/bin to PATH if needed.')
-    p=subprocess.run(args,check=False,text=True,capture_output=True,timeout=timeout)
+    executable=find_tool('datasets')
+    if not executable:
+        raise RuntimeError('NCBI datasets не обнаружен. EvoGene проверил PATH, ~/bin, /opt/homebrew/bin и /usr/local/bin. Установите datasets и проверьте ~/bin/datasets version.')
+    p=subprocess.run([executable,*args[1:]],check=False,text=True,capture_output=True,timeout=timeout)
     if p.returncode:raise RuntimeError('NCBI datasets: '+p.stderr[-600:])
     return p.stdout
 
