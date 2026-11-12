@@ -49,6 +49,14 @@ if 'auto_report' in st.session_state:
         } for item in support['options']], use_container_width=True, hide_index=True)
         st.bar_chart({item['label']: item['support_percent'] for item in support['options']})
         st.caption('Проценты НЕ являются статистически калиброванными вероятностями.')
+        st.subheader('Проверки каждой гипотезы')
+        for mechanism, outcome in support['tests'].items():
+            with st.expander(mechanism.replace('_',' ').title()+' — '+outcome['status']):
+                st.write(outcome['interpretation'])
+                st.write('Свидетельства:',outcome['observations'])
+                st.write('Для проверки ещё нужно:',outcome['missing'])
+        if r.get('origin_screen_errors'):
+            st.warning('Не удалось выполнить часть проверок: '+str(r['origin_screen_errors']))
     st.subheader('Технические результаты: '+r['hypothesis'])
     st.write('NCBI assembly accessions:',[(x['species'],x['accession']) for x in r['ncbi_assemblies']])
     st.write('Matching species:',r['matching_species'])

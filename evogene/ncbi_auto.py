@@ -6,7 +6,8 @@ FASTA assemblies do not encode gene identifiers. Provide a gene sequence,
 import json, re, shutil, subprocess, zipfile
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
-from .support import distribution
+from .origin_tests import distribute
+from .genome_probes import discover_target_locus, focal_flanks, assess_synteny
 
 def fasta_iter(path):
     return fasta(path)
@@ -122,6 +123,28 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
         except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,zipfile.BadZipFile) as exc:
             failures.append({'species':species,'error':str(exc)})
     if not hits:raise RuntimeError('No species analyzed successfully: '+str(failures))
+    # Evidence screens: focal copies and conserved DNA flanks from focal reference.
+    # Failure to establish synteny must stay unknown, not become evidence of absence.
+    extra_target_copies=[]; synteny_evidence={}; origin_screen_errors=[]
+    try:
+        if progress:progress('NCBI: target reference for paralogy and synteny screens')
+        focal_assembly=download(target_species,cache)
+        main,extra_target_copies=discover_target_locus(query,focal_assembly['fasta'])
+        if main is None:
+            origin_screen_errors.append('Target locus cannot be mapped to focal reference; synteny unavailable')
+        else:
+            flanks=focal_flanks(focal_assembly['fasta'],main)
+            for assembly in selected:
+                relative=assembly['species']
+                if relative not in hits:continue
+                try:
+                    if progress:progress('Synteny anchors: '+relative)
+                    synteny_evidence[relative]=assess_synteny(
+                        flanks,hits[relative],assembly['fasta'],relative)
+                except (OSError,RuntimeError,ValueError,subprocess.TimeoutExpired) as exc:
+                    origin_screen_errors.append(relative+': '+str(exc))
+    except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,zipfile.BadZipFile) as exc:
+        origin_screen_errors.append('Target reference: '+str(exc))
     valid={s:[h for h in hs if h['query_coverage']>=.5 and h['identity_approx']>=.65] for s,hs in hits.items()}
     matching=[s for s,hs in valid.items() if hs]
     coding=[s for s,hs in valid.items() if any(h['coding_overlap']=='overlaps_cds' for h in hs)]
@@ -130,9 +153,11 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     result={'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
             'hypothesis':category,'matching_species':matching,'coding_species':coding,
             'ncbi_assemblies':selected,'download_or_analysis_errors':failures,'relatives':hits,
+            'extra_target_copies':extra_target_copies,'synteny_evidence':synteny_evidence,
+            'origin_screen_errors':origin_screen_errors,
             'limitations':['DNA mapping alone does not prove orthology, synteny or de novo origin.',
               'No CDS overlap is not proof of noncoding ancestry.',
               'No mapping hit is not proof of absence.',
               'Relative panel is curated, not inferred phylogenetically.']}
-    result['origin_support'] = distribution(result)
+    result['origin_support'] = distribute(result)
     return result
