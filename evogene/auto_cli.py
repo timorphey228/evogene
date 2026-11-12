@@ -18,11 +18,13 @@ r=analyze(a.target_fasta,a.species,a.gene_id,gene_sequence=a.gene_sequence,
           progress=print)
 d=Path(a.results);d.mkdir(parents=True,exist_ok=True)
 p=d/(a.gene_id+'.json');p.write_text(json.dumps(r,indent=2,ensure_ascii=False))
-print('\nМЕХАНИЗМ ВОЗНИКНОВЕНИЯ (эвристические веса, не вероятности):')
+print('\nМЕХАНИЗМ ВОЗНИКНОВЕНИЯ (независимые признаки, не вероятности):')
 m=r.get('mechanism_report')
 if m:
     for item in m['options']:
-        print(f"{item['label']}: {item['support_percent']:.1f}% ({item['status']})")
+        print(f"{item['label']}: {item['status']} — признаков {item['signal_count']}")
+        for signal in item['signals']:
+            print('  +', signal)
     print('Сохранность ДНК у видов:', ', '.join(m['conservation']['dna_homology_species']))
     print(m['warning'])
 else:

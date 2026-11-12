@@ -81,11 +81,32 @@ def annotate(hits,gff_path):
     if not gff_path:
         for hit in hits:hit['coding_overlap']='unknown_no_gff'
         return
-    cds=[f for f in gff(gff_path) if f['type']=='cds']
+    # Build per-chromosome merged CDS intervals once; avoid O(hits * all_CDS).
+    from bisect import bisect_right
+    intervals={}
+    count=0
+    for item in gff(gff_path):
+        if item['type']=='cds':
+            intervals.setdefault(item['chrom'],[]).append((item['start'],item['end']))
+            count+=1
+    merged={}
+    for chrom, spans in intervals.items():
+        spans.sort()
+        collapsed=[]
+        for left,right in spans:
+            if collapsed and left<=collapsed[-1][1]:
+                collapsed[-1]=(collapsed[-1][0],max(right,collapsed[-1][1]))
+            else:
+                collapsed.append((left,right))
+        merged[chrom]=( [left for left,_ in collapsed], collapsed )
     for hit in hits:
-        hit['coding_overlap']=('overlaps_cds' if any(c['chrom']==hit['chrom'] and
-            min(c['end'],hit['end'])>max(c['start'],hit['start']) for c in cds)
-            else 'no_cds_overlap_not_proof_of_noncoding' if cds else 'unknown_no_cds_features')
+        starts, spans=merged.get(hit['chrom'],([],[]))
+        idx=bisect_right(starts,hit['end']-1)-1
+        overlaps=idx>=0 and spans[idx][1]>hit['start']
+        hit['coding_overlap']=(
+            'overlaps_cds' if overlaps else
+            'no_cds_overlap_not_proof_of_noncoding' if count else
+            'unknown_no_cds_features')
 
 def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
     feature,query=gene_region(target_fasta,target_gff,gene_id)

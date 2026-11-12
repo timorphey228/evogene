@@ -81,6 +81,6 @@ class PipelineSummaryIntegrationTests(unittest.TestCase):
         self.assertIn('synteny_evidence',report)
         m=report['mechanism_report']
         duplication=next(x for x in m['tests'] if x['mechanism']=='dna_duplication')
-        self.assertGreater(duplication['evidence_weight'],0)
-        self.assertEqual(round(sum(x['support_percent']
-                                 for x in m['options']),1),100.0)
+        self.assertEqual(duplication['status'],'candidate')
+        self.assertGreater(duplication['signal_count'],0)
+        self.assertFalse(m['is_calibrated_probability'])

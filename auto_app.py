@@ -69,12 +69,15 @@ if 'auto_report' in st.session_state:
         st.dataframe([{
             'Гипотеза':item['label'],
             'Статус':item['status'],
-            'Поддержка (%)':item['support_percent'],
-            'Обоснование':item['interpretation']
+            'Признаков обнаружено':item['signal_count'],
+            'Наблюдения':item['interpretation']
         } for item in mechanism['options']],use_container_width=True,hide_index=True)
-        st.bar_chart([{'Гипотеза':item['label'],'Поддержка (%)':item['support_percent']}
-                      for item in mechanism['options']],
-                     x='Гипотеза',y='Поддержка (%)',horizontal=True)
+        completeness=mechanism['completeness']
+        st.caption(f"Проверок с доступными данными: {completeness['assessed']} из {completeness['total']}. "
+                   "0 признаков не означает 0% вероятности.")
+        if completeness['not_assessed']:
+            st.warning('Не удалось полноценно провести проверки: '+
+                       ', '.join(completeness['not_assessed']))
         st.subheader('Межвидовая сохранность — не механизм возникновения')
         st.caption(mechanism['conservation']['explanation'])
         st.write('Сходство ДНК у видов:',mechanism['conservation']['dna_homology_species'])
@@ -85,6 +88,7 @@ if 'auto_report' in st.session_state:
         for item in mechanism['tests']:
             with st.expander(item['label']+' — '+item['status']):
                 st.write(item['interpretation'])
+                st.write('Ограничения:',item['limitations'])
                 st.json(item['observations'])
         protein=r.get('protein_evidence') or {}
         with st.expander('Белковые гомологи и предполагаемые родительские гены'):
