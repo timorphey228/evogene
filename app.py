@@ -10,6 +10,7 @@ from evogene.case_data import (
 )
 from evogene.visualization import render_report_visualizations
 from evogene.analysis_notes import render_analysis_annotations
+from evogene.scientific_report import analyze_case_batch, batch_as_markdown
 
 st.set_page_config(page_title="EvoGene · ITMO case 2", layout="wide")
 st.title("EvoGene · эволюционное происхождение белок-кодирующих генов")
@@ -24,6 +25,7 @@ mode = st.radio("Источник данных", [
 if st.session_state.get("evo_active_mode") != mode:
     st.session_state.pop("evo_result", None)
     st.session_state.pop("case_export", None)
+    st.session_state.pop("evo_batch", None)
     st.session_state["evo_active_mode"] = mode
 
 
@@ -122,8 +124,16 @@ else:
                 f"Записей по методам: {index['record_counts']}. "
                 "Не следует считать эти данные независимой полной проверкой генома."
             )
-            default = index["genes"].index("FBgn0040343") if "FBgn0040343" in index["genes"] else 0
-            gene = st.selectbox("Выбрать любой ген из файла", index["genes"], index=default)
+            demos = ["FBgn0040343", "FBgn0262810", "FBgn0025616"]
+            defaults = [gene_id for gene_id in demos if gene_id in index["genes"]]
+            if not defaults:
+                defaults = index["genes"][:1]
+            genes = st.multiselect(
+                "Кандидатные гены: один или несколько (для защиты рекомендуется ≥ 3)",
+                options=index["genes"], default=defaults,
+                help="Каждый ген анализируется независимо, затем создаётся общий отчёт "
+                     "с конкретными доказательствами и ограничениями.",
+            )
             method = st.selectbox(
                 "Тип последовательностей", options=list(METHODS),
                 format_func=lambda key: METHODS[key][1],
@@ -136,31 +146,40 @@ else:
                      "Полнота по всем видам отображается отдельно.",
             )
             from hashlib import sha256
-            selection_id = (sha256(raw).hexdigest(), gene, method, tuple(chosen_species))
+            selection_id = (sha256(raw).hexdigest(), tuple(genes), method, tuple(chosen_species))
             if st.session_state.get("evo_case_selection") != selection_id:
                 st.session_state.pop("evo_result", None)
                 st.session_state.pop("case_export", None)
+                st.session_state.pop("evo_batch", None)
                 st.session_state["evo_case_selection"] = selection_id
             st.caption("Raw = геномная ДНК; Spaln/Genewise = предсказания "
                        "сплайсированных кодирующих фрагментов. Score/shift — "
                        "авторская метаинформация; без опубликованной калибровки "
                        "её нельзя переводить в p-value.")
-            if st.button("Исследовать выбранный ген", type="primary",
-                         disabled=not chosen_species):
+            if len(genes) > 10:
+                st.warning("Выбрано более 10 генов. Анализ может занять много времени: "
+                           "пока каждый ген обрабатывается отдельными проходами по файлу.")
+            if st.button("Анализировать выбранные гены", type="primary",
+                         disabled=not chosen_species or not genes):
                 with tempfile.NamedTemporaryFile(suffix=".fasta") as temp:
                     temp.write(raw)
                     temp.flush()
                     try:
-                        result = analyze_case(
-                            temp.name, gene, method=method,
-                            selected_species=chosen_species,
+                        batch = analyze_case_batch(
+                            temp.name, genes, method=method,
+                            selected_species=chosen_species, source_name=file.name,
                         )
-                        export = export_gene_fasta(
-                            temp.name, gene, method,
-                            species=set(chosen_species) | {"dmel"},
-                        )
-                        st.session_state["evo_result"] = result
-                        st.session_state["case_export"] = export
+                        st.session_state["evo_batch"] = batch
+                        if batch["results"]:
+                            first = batch["results"][0]["gene_id"]
+                            st.session_state["evo_result"] = batch["raw_reports"][first]
+                            st.session_state["case_export"] = export_gene_fasta(
+                                temp.name, first, method,
+                                species=set(chosen_species) | {"dmel"},
+                            )
+                        else:
+                            st.session_state.pop("evo_result", None)
+                            st.session_state.pop("case_export", None)
                     except (OSError, ValueError, UnicodeError) as exc:
                         st.error(f"Не удалось обработать файл: {exc}")
         except (OSError, ValueError, UnicodeError) as exc:
@@ -168,6 +187,68 @@ else:
     else:
         st.info("Загрузите файл из исследования; встроенная демо-таблица "
                 "не заменяет реальных последовательностей.")
+
+batch = st.session_state.get("evo_batch")
+if batch and mode.startswith("Данные статьи"):
+    st.divider()
+    st.header("Итоговый результат по требованиям кейса")
+    summary = batch["summary"]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Генов выбрано", summary["requested"])
+    c2.metric("Генов обработано", summary["completed"])
+    c3.metric("Не удалось обработать", summary["failed"])
+    if batch["errors"]:
+        st.error("Ошибки отдельных генов не скрываются.")
+        st.dataframe(batch["errors"], use_container_width=True, hide_index=True)
+    table = [{
+        "Ген": entry["gene_id"],
+        "Механизм происхождения": entry["conclusion"]["label"],
+        "Статус дерева": entry["phylogeny"].get("status", "not_assessed"),
+        "Сравнительных видов": len(entry["input"]["comparison_species_with_records"]),
+        "Наблюдений": len(entry["evidence"]),
+    } for entry in batch["results"]]
+    if table:
+        st.dataframe(table, use_container_width=True, hide_index=True)
+        gene_ids = [entry["gene_id"] for entry in batch["results"]]
+        selected_gene = st.selectbox(
+            "Подробный отчёт по гену", gene_ids, key="case_batch_detail_gene"
+        )
+        detail = next(entry for entry in batch["results"]
+                      if entry["gene_id"] == selected_gene)
+        st.subheader(selected_gene + ": " + detail["conclusion"]["label"])
+        st.write("**Обоснование:** " + detail["conclusion"]["why"])
+        st.markdown("### 1. Наблюдаемые данные — не эволюционные события")
+        for evidence in detail["evidence"]:
+            with st.expander(evidence["description"]):
+                st.json(evidence["value"])
+                st.write("Источник:", evidence["source"])
+                st.write("Интерпретация:", evidence["interpretation"])
+                st.warning("Не доказывает: " + evidence["does_not_prove"])
+        st.markdown("### 2. Основные этапы анализа")
+        st.dataframe(detail["analysis_steps"],
+                     use_container_width=True, hide_index=True)
+        st.markdown("### 3. Проверка шести требований задания")
+        st.dataframe(detail["case_requirements"],
+                     use_container_width=True, hide_index=True)
+        st.markdown("### 4. Недостающие доказательства")
+        for missing in detail["missing_for_mechanistic_inference"]:
+            st.write("• " + missing)
+        st.caption("Воспроизводимость: входной SHA-256 "
+                   + batch["source"]["sha256"] + " | метод: "
+                   + batch["source"]["method"])
+        st.session_state["evo_result"] = batch["raw_reports"][selected_gene]
+    st.download_button(
+        "Скачать полный научный отчёт JSON по всем генам",
+        data=json.dumps(batch, ensure_ascii=False, indent=2),
+        file_name="evogene_case2_multi_gene_report.json",
+        mime="application/json",
+    )
+    st.download_button(
+        "Скачать читаемый отчёт Markdown по всем генам",
+        data=batch_as_markdown(batch),
+        file_name="evogene_case2_multi_gene_report.md",
+        mime="text/markdown",
+    )
 
 result = st.session_state.get("evo_result")
 if result is not None:
