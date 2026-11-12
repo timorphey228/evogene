@@ -173,7 +173,7 @@ def method_summary(path, gene_id):
     return result
 
 
-def analyze(path, gene_id, method="raw"):
+def analyze(path, gene_id, method="raw", selected_species=None):
     """Investigate one gene and one method, with cross-method completeness."""
     if method not in METHODS:
         raise ValueError("Available methods: " + ", ".join(METHODS))
@@ -186,10 +186,13 @@ def analyze(path, gene_id, method="raw"):
         raise ValueError("Reference gene dmel|" + gene_id + " missing")
     header, query = max(targets, key=lambda x: len(x[1]))
     hits = []
+    allow = set(selected_species) if selected_species is not None else None
     for h, s in records:
         if h == header or not s:
             continue
         metadata = header_info(h)
+        if allow is not None and metadata["species_abbr"] not in allow:
+            continue
         hits.append({
             **metadata, "header": h, "length_nt": len(s),
             **compare(query, s),
@@ -214,6 +217,7 @@ def analyze(path, gene_id, method="raw"):
     return {
         "gene_id": gene_id,
         "method": method,
+        "requested_species": sorted(allow) if allow is not None else None,
         "source_section": section,
         "input_type": "published_preselected_hits_not_whole_genome_or_msa",
         "target_length_nt": len(query),
