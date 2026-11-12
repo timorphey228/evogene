@@ -69,6 +69,12 @@ def _bundle(report):
     stream = BytesIO()
     with ZipFile(stream,"w",compression=ZIP_DEFLATED) as archive:
         archive.writestr("run_report.json",json.dumps(report,ensure_ascii=False,indent=2,default=str))
+        folder=report.get("output_folder")
+        if folder:
+            for name in ("candidate_genes.fasta","te_library.fasta"):
+                source=Path(folder)/name
+                if source.exists() and source.stat().st_size <= 25*1024*1024:
+                    archive.write(source,arcname=name)
         archive.writestr("audit.jsonl","\n".join(
             json.dumps(x,ensure_ascii=False) for x in report.get("audit_log",[]))+"\n")
         for gene_id, result in report.get("genes",{}).items():
@@ -213,6 +219,13 @@ def _tree_panel(entry):
     c1.metric("Последовательностей",phy.get("taxa",0))
     c2.metric("Метод",str(phy.get("method","—")).replace("_"," ")[:35])
     c3.metric("Поддержка ветвей",phy.get("support_type") or "Не вычислена")
+    if phy.get("alignment_quality"):
+        with st.expander("Контроль качества множественного выравнивания"):
+            quality=phy["alignment_quality"]
+            st.json(quality)
+            if quality.get("low_information"):
+                st.warning("Слишком мало информативных позиций; топология может "
+                           "быть неустойчивой независимо от формальной поддержки.")
     if phy.get("warnings"):
         with st.expander("Научные ограничения"):
             for warning in phy["warnings"]:
