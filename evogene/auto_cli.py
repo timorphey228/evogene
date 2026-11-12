@@ -18,4 +18,8 @@ r=analyze(a.target_fasta,a.species,a.gene_id,gene_sequence=a.gene_sequence,
           progress=print)
 d=Path(a.results);d.mkdir(parents=True,exist_ok=True)
 p=d/(a.gene_id+'.json');p.write_text(json.dumps(r,indent=2,ensure_ascii=False))
+print('\nСВОДНАЯ ОЦЕНКА (не статистические вероятности):')
+for item in r['origin_support']['options']:
+    print(f"{item['label']}: {item['support_percent']:.1f}%")
+print(r['origin_support']['warning'])
 print(r['hypothesis'],p)

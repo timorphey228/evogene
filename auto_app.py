@@ -37,7 +37,19 @@ if st.button('Скачать геномы NCBI и запустить анали�
             status.empty()
 if 'auto_report' in st.session_state:
     r=st.session_state['auto_report']
-    st.subheader(r['hypothesis'])
+    st.subheader('Итог: варианты эволюционного происхождения')
+    support = r.get('origin_support')
+    if support:
+        st.warning(support['warning'])
+        st.write(support['conclusion'])
+        st.dataframe([{
+            'Механизм': item['label'],
+            'Поддержка (%)': item['support_percent'],
+            'Пояснение': item['explanation']
+        } for item in support['options']], use_container_width=True, hide_index=True)
+        st.bar_chart({item['label']: item['support_percent'] for item in support['options']})
+        st.caption('Проценты НЕ являются статистически калиброванными вероятностями.')
+    st.subheader('Технические результаты: '+r['hypothesis'])
     st.write('NCBI assembly accessions:',[(x['species'],x['accession']) for x in r['ncbi_assemblies']])
     st.write('Matching species:',r['matching_species'])
     st.write('Download errors:',r['download_or_analysis_errors'])

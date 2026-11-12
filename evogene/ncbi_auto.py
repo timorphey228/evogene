@@ -6,6 +6,7 @@ FASTA assemblies do not encode gene identifiers. Provide a gene sequence,
 import json, re, shutil, subprocess, zipfile
 from pathlib import Path
 from .genomes import fasta, map_genome, annotate
+from .support import distribution
 
 def fasta_iter(path):
     return fasta(path)
@@ -126,10 +127,12 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     coding=[s for s,hs in valid.items() if any(h['coding_overlap']=='overlaps_cds' for h in hs)]
     category=('conserved_coding_candidate' if len(coding)>=2 else
               'conserved_dna_locus_origin_unresolved' if matching else 'unresolved_no_detectable_hit')
-    return {'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
+    result={'gene_id':gene_id,'target_species':target_species,'query_mode':mode,
             'hypothesis':category,'matching_species':matching,'coding_species':coding,
             'ncbi_assemblies':selected,'download_or_analysis_errors':failures,'relatives':hits,
             'limitations':['DNA mapping alone does not prove orthology, synteny or de novo origin.',
               'No CDS overlap is not proof of noncoding ancestry.',
               'No mapping hit is not proof of absence.',
               'Relative panel is curated, not inferred phylogenetically.']}
+    result['origin_support'] = distribution(result)
+    return result

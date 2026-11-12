@@ -2,6 +2,7 @@
 from dataclasses import dataclass,asdict
 import gzip, subprocess, shutil, tempfile
 from pathlib import Path
+from .support import distribution
 
 def lines(path):
     return gzip.open(path,'rt') if str(path).endswith('.gz') else open(path,encoding='utf8')
@@ -100,7 +101,7 @@ def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
     elif len(coding)>=2: hyp='conserved_coding_candidate'; explanation='Similar loci overlap coding annotations in at least two relatives, but orthology is not verified.'
     elif any(passing.values()): hyp='conserved_dna_locus_origin_unresolved'; explanation='DNA similarities exist, but synteny and ancestral coding status are not established.'
     else: hyp='unresolved_no_detectable_hit'; explanation='No hits pass thresholds; missing hits do NOT prove de novo origin.'
-    return {'gene_id':gene_id,'input_type':'whole_genome_fasta_gff3',
+    result={'gene_id':gene_id,'input_type':'whole_genome_fasta_gff3',
             'target':{'chrom':feature['chrom'],'start_0based':feature['start'],
             'end_0based':feature['end'],'length_nt':len(query)},
             'hypothesis':hyp,'explanation':explanation,'relatives':out,'extra_target_copies':extras,
@@ -109,3 +110,5 @@ def analyze(target_fasta,target_gff,gene_id,relatives,coverage=.5,identity=.65):
                            'No CDS overlap is not proof of noncoding ancestry.',
                            'No hit is not proof of absence or de novo origin.',
                            'Gene tree, paralog search and protein analyses remain necessary.']}
+    result['origin_support'] = distribution(result)
+    return result
