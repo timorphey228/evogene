@@ -35,7 +35,9 @@ class ProteinHomologyTests(unittest.TestCase):
                 'retrocopy_evidence':{'target_model':{'status':'annotated','exon_count':1}},
                 'protein_evidence':evidence}
         m=classify(report)
-        self.assertEqual(m['leading_candidate'],'retroposition')
+        self.assertIn('retroposition',m['candidate_mechanisms'])
+        self.assertIn('dna_duplication',m['candidate_mechanisms'])
+        self.assertIsNone(m['leading_candidate'])
 
     def test_no_protein_access(self):
         self.assertFalse(query_orfs('ATGAAATAG'))
