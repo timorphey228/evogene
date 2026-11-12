@@ -225,12 +225,14 @@ def analyze_case_batch(path, genes, method="raw", selected_species=None, source_
         "software": _software_versions(),
     }
     result = []
+    raw_reports = {}
     errors = []
     for gene_id in genes:
         try:
             data = analyze_case(path, gene_id, method=method,
                                 selected_species=relatives)
             result.append(make_case_gene_result(data, provenance))
+            raw_reports[gene_id] = data
         except (OSError, ValueError, UnicodeError) as exc:
             errors.append({"gene_id": gene_id, "status": "failed",
                            "reason": str(exc)})
@@ -240,6 +242,7 @@ def analyze_case_batch(path, genes, method="raw", selected_species=None, source_
         "requested_gene_ids": genes,
         "source": provenance, "gene_count": len(result),
         "results": result, "errors": errors,
+        "raw_reports": raw_reports,
         "summary": {
             "requested": len(genes), "completed": len(result),
             "failed": len(errors),
@@ -259,7 +262,7 @@ def batch_as_markdown(batch):
         "# EvoGene — отчёт по кейсу № 2",
         "", "## Исходные данные и воспроизводимость",
         f"- Файл: {batch['source']['filename']}",
-        f"- SHA-256: \`{batch['source']['sha256']}\`",
+        f"- SHA-256: `{batch['source']['sha256']}`",
         f"- Метод анализа: {batch['source']['method']}",
         f"- Запрошено генов: {batch['summary']['requested']}",
         f"- Обработано: {batch['summary']['completed']}; ошибок: {batch['summary']['failed']}",
