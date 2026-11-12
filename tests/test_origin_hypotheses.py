@@ -78,6 +78,10 @@ class PipelineSummaryIntegrationTests(unittest.TestCase):
         self.assertTrue(any(e['stage']=='protein_homology'
                             for e in report['pipeline_events']))
         self.assertIn('synteny_evidence',report)
+        self.assertEqual(synteny.call_args.kwargs['query'], 'ATG'*110)
+        self.assertIn('gff_path', synteny.call_args.kwargs)
+        self.assertIn('query_orfs', report)
+        self.assertEqual(report['phylogeny']['status'], 'not_assessed')
         m=report['mechanism_report']
         duplication=next(x for x in m['tests'] if x['mechanism']=='dna_duplication')
         self.assertEqual(duplication['status'],'candidate')
