@@ -66,6 +66,10 @@ def assess_synteny(flanks,hits,relative_assembly,species,query=None,gff_path=Non
     else:locus='no_detectable_gene_hit'
     result={'status':'flanks_collinear','locus_status':locus,
             'chrom':a['chrom'],'interval_0based':[low,high],
+            'left_anchor':{k:a[k] for k in ('chrom','start','end','strand')},
+            'right_anchor':{k:b[k] for k in ('chrom','start','end','strand')},
+            'syntenic_hits':[{k:h[k] for k in ('chrom','start','end','strand')}
+                             for h in inside[:20]],
             'homologs_at_syntenic_locus':len(inside),'homologs_elsewhere':len(elsewhere)}
     if rescue:result['local_rescue']=rescue
     return result
