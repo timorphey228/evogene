@@ -61,29 +61,46 @@ if 'auto_report' in st.session_state:
                      use_container_width=True,hide_index=True)
     st.caption('Пустая таблица по виду означает отсутствие выравниваний при текущих настройках; '
                'это не доказательство отсутствия гена.')
-    st.subheader('Итог: варианты эволюционного происхождения')
-    support = r.get('origin_support')
-    if support:
-        st.warning(support['warning'])
-        st.write(support['conclusion'])
+    st.subheader('Механизм возникновения гена — отдельный отчёт')
+    mechanism=r.get('mechanism_report')
+    if mechanism:
+        st.warning(mechanism['warning'])
+        st.write(mechanism['conclusion'])
         st.dataframe([{
-            'Механизм': item['label'],
-            'Поддержка (%)': item['support_percent'],
-            'Пояснение': item['explanation']
-        } for item in support['options']], use_container_width=True, hide_index=True)
-        st.bar_chart([
-            {'Гипотеза': item['label'], 'Поддержка (%)': item['support_percent']}
-            for item in support['options']
-        ], x='Гипотеза', y='Поддержка (%)', horizontal=True)
-        st.caption('Проценты НЕ являются статистически калиброванными вероятностями.')
-        st.subheader('Проверки каждой гипотезы')
-        for mechanism, outcome in support['tests'].items():
-            with st.expander(mechanism.replace('_',' ').title()+' — '+outcome['status']):
-                st.write(outcome['interpretation'])
-                st.write('Свидетельства:',outcome['observations'])
-                st.write('Для проверки ещё нужно:',outcome['missing'])
+            'Гипотеза':item['label'],
+            'Статус':item['status'],
+            'Поддержка (%)':item['support_percent'],
+            'Обоснование':item['interpretation']
+        } for item in mechanism['options']],use_container_width=True,hide_index=True)
+        st.bar_chart([{'Гипотеза':item['label'],'Поддержка (%)':item['support_percent']}
+                      for item in mechanism['options']],
+                     x='Гипотеза',y='Поддержка (%)',horizontal=True)
+        st.subheader('Межвидовая сохранность — не механизм возникновения')
+        st.caption(mechanism['conservation']['explanation'])
+        st.write('Сходство ДНК у видов:',mechanism['conservation']['dna_homology_species'])
+        st.write('Перекрытие CDS у видов:',mechanism['conservation']['cds_overlap_species'])
+        st.write('Синтенные кодирующие локусы:',
+                 mechanism['conservation']['syntenic_coding_species'])
+        st.subheader('Диагностические проверки каждой гипотезы')
+        for item in mechanism['tests']:
+            with st.expander(item['label']+' — '+item['status']):
+                st.write(item['interpretation'])
+                st.json(item['observations'])
+        protein=r.get('protein_evidence') or {}
+        with st.expander('Белковые гомологи и предполагаемые родительские гены'):
+            st.write('Результат белкового поиска:',protein.get('status','not_run'))
+            st.write('Длины ORF (аминокислоты):',protein.get('orf_lengths_aa',[]))
+            st.write('Кандидаты белковых гомологов:',protein.get('candidates',[])[:15])
+            st.caption('Это предварительный локальный белковый скрининг, не BLASTP.')
+        retro=r.get('retrocopy_evidence') or {}
+        with st.expander('Сравнение структуры CDS: потомок и предполагаемый родитель'):
+            st.write('Исследуемый ген:',retro.get('target_model',{}))
+            st.write('Кандидаты родительских локусов:',retro.get('parent_candidates',[]))
+            st.write('Научные ограничения:',retro.get('limitations',[]))
         if r.get('origin_screen_errors'):
-            st.warning('Не удалось выполнить часть проверок: '+str(r['origin_screen_errors']))
+            st.warning('Некоторые проверки не завершены: '+str(r['origin_screen_errors']))
+    else:
+        st.info('Отчёт нового классификатора ещё не создан. Перезапусти анализ на этой версии.')
     st.subheader('Технические результаты: '+r['hypothesis'])
     st.write('NCBI assembly accessions:',[(x['species'],x['accession']) for x in r['ncbi_assemblies']])
     st.write('Matching species:',r['matching_species'])

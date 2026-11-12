@@ -9,6 +9,7 @@ from .genomes import fasta, map_genome, annotate
 from .origin_tests import distribute
 from .mechanism_v3 import classify
 from .gene_models import compare_retrocopy
+from .protein_screen import protein_homology
 from .tools import find_tool
 from .genome_probes import discover_target_locus, focal_flanks, assess_synteny
 
@@ -94,6 +95,38 @@ def download(species,cache='genomes/ncbi_cache'):
         return {'species':species,'accession':accession,'fasta':str(f),'gff':str(g) if g else None,'cached':False}
     finally:archive.unlink(missing_ok=True)
 
+def ensure_proteins(assembly,cache='genomes/ncbi_cache'):
+    """Download focal proteome separately, with persistent cache."""
+    accession=assembly['accession']
+    folder=Path(cache)/accession
+    folder.mkdir(parents=True,exist_ok=True)
+    for suffix in ('.faa','.faa.gz'):
+        path=folder/('proteins'+suffix)
+        if path.is_file() and path.stat().st_size:
+            return str(path)
+    archive=folder/'protein_only.zip'
+    try:
+        command(['datasets','download','genome','accession',accession,
+                 '--include','protein','--filename',str(archive),
+                 '--no-progressbar'],1200)
+        if not archive.exists() or archive.stat().st_size>300*1024*1024:
+            raise ValueError('Protein NCBI archive missing or >300 MB')
+        with zipfile.ZipFile(archive) as z:
+            candidates=[v for v in z.infolist()
+                        if v.filename.startswith('ncbi_dataset/data/') and
+                        v.filename.endswith(('.faa','.faa.gz')) and not v.is_dir()]
+            if len(candidates)!=1:
+                raise ValueError('Expected exactly one protein FASTA (.faa)')
+            entry=candidates[0]
+            if entry.file_size>600*1024*1024:
+                raise ValueError('Uncompressed protein FASTA too large')
+            output=folder/('proteins.faa.gz' if entry.filename.endswith('.gz') else 'proteins.faa')
+            with z.open(entry) as inp,output.open('wb') as out:
+                shutil.copyfileobj(inp,out)
+        return str(output)
+    finally:
+        archive.unlink(missing_ok=True)
+
 def target_gene(path,sequence='',chrom='',start=None,end=None,strand='+'):
     if sequence:
         dna=''.join(x.strip() for x in sequence.upper().splitlines() if not x.lstrip().startswith('>')).replace(' ','')
@@ -131,7 +164,8 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
     # Evidence screens: focal copies and conserved DNA flanks from focal reference.
     # Failure to establish synteny must stay unknown, not become evidence of absence.
     extra_target_copies=[]; synteny_evidence={}; origin_screen_errors=[]
-    parent_candidates=[]; retrocopy_evidence={}; focal_reference=None
+    parent_candidates=[]; retrocopy_evidence={}; focal_reference=None; main=None
+    protein_evidence={'status':'not_run','candidates':[]}
     try:
         if progress:progress('NCBI: target reference for paralogy and synteny screens')
         focal_assembly=download(target_species,cache)
@@ -147,6 +181,14 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
                 not (h['chrom']==main['chrom'] and
                      min(h['end'],main['end'])>max(h['start'],main['start']))][:30]
         retrocopy_evidence=compare_retrocopy(main,parent_candidates,focal_assembly['gff'])
+        try:
+            if progress:progress('Protein homology: focal reference proteins')
+            protein_path=ensure_proteins(focal_assembly,cache)
+            protein_evidence=protein_homology(query,protein_path,focal_assembly['gff'],main)
+        except (OSError,RuntimeError,ValueError,LookupError,subprocess.TimeoutExpired,
+                zipfile.BadZipFile) as exc:
+            origin_screen_errors.append('Protein homology: '+str(exc))
+            protein_evidence={'status':'failed','candidates':[],'error':str(exc)}
         if main is None:
             origin_screen_errors.append('Target locus cannot be mapped to focal reference; synteny unavailable')
         else:
@@ -172,7 +214,9 @@ def analyze(target_fasta,target_species,gene_id,*,gene_sequence='',chrom='',star
             'ncbi_assemblies':selected,'download_or_analysis_errors':failures,'relatives':hits,
             'extra_target_copies':extra_target_copies,'synteny_evidence':synteny_evidence,
             'origin_screen_errors':origin_screen_errors,
-            'focal_reference':focal_reference,'retrocopy_evidence':retrocopy_evidence,
+            'focal_reference':focal_reference,'target_locus':main,
+            'retrocopy_evidence':retrocopy_evidence,
+            'protein_evidence':protein_evidence,
             'limitations':['DNA mapping alone does not prove orthology, synteny or de novo origin.',
               'No CDS overlap is not proof of noncoding ancestry.',
               'No mapping hit is not proof of absence.',

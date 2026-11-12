@@ -13,6 +13,24 @@ def classify(report):
     s=legacy_screen(report)
     retro=report.get('retrocopy_evidence') or {}
     candidates=retro.get('parent_candidates') or []
+    ref_target=report.get('target_locus') or report.get('target')
+    proteins=report.get('protein_evidence') or {}
+    protein_candidates=proteins.get('candidates') or []
+    focal_target=retro.get('target_model') or {}
+    eligible_protein_parents=[
+        x for x in protein_candidates if x.get('gene_model') and
+        not x.get('overlaps_target') and
+        x['gene_model'].get('cds_exons',0)>=2 and
+        focal_target.get('status')=='annotated' and
+        focal_target.get('exon_count')==1 and
+        ref_target and x['gene_model']['chrom']!=ref_target.get('chrom') and
+        x.get('identity',0)>=.32 and x.get('query_coverage',0)>=.40
+    ]
+    protein_paralogs=[
+        x for x in protein_candidates if x.get('gene_model') and ref_target and
+        not x.get('overlaps_target') and
+        x.get('identity',0)>=.35 and x.get('query_coverage',0)>=.50
+    ]
     positive_retro=[x for x in candidates if x.get('parent_multi_exon_and_target_single_exon')]
     dup=report.get('extra_target_copies') or []
     synteny=report.get('synteny_evidence') or {}
@@ -30,11 +48,11 @@ def classify(report):
     # De novo: outgroup syntenic non-CDS evidence, not merely absent hit.
     if len(outgroup_noncds)>=2 and not dup and not cdss:
         w['de_novo']=7
-    if dup:
-        # Additional DNA loci indicate duplication broadly, but are also
+    if dup or protein_paralogs:
+        # Additional DNA or protein-coding loci indicate duplication broadly, but are also
         # compatible with retroposition; reduce nonspecific score when retro signal.
-        w['dna_duplication']=min(6,2+2*len(dup))
-    if positive_retro:
+        w['dna_duplication']=min(6,2+2*len(dup)+2*len(protein_paralogs))
+    if positive_retro or eligible_protein_parents:
         w['retroposition']=10
         w['dna_duplication']=min(w['dna_duplication'],2)
     if relocated:
@@ -54,8 +72,8 @@ def classify(report):
     statuses={}
     reasons={
         'de_novo':f"Синтенные участки без CDS у {len(outgroup_noncds)} видов; нужны предковый ORF и белковые гомологи.",
-        'dna_duplication':f"Дополнительных сходных локусов в исходном геноме: {len(dup)}; требуется проверка паралогов.",
-        'retroposition':f"Кандидатов с одноэкзонным CDS потомка и многоэкзонным CDS предполагаемого родителя: {len(positive_retro)}; нужен белковый поиск и подтверждение направления.",
+        'dna_duplication':f"ДНК-локусов: {len(dup)}; белковых гомологов-кандидатов: {len(protein_paralogs)}. Нужна филогения паралогов.",
+        'retroposition':f"Кандидатов по структуре CDS и ДНК: {len(positive_retro)}; по белковому сходству и структуре CDS: {len(eligible_protein_parents)}. Нужно подтвердить направление происхождения.",
         'transposition':f"Признаки смещения гомолога при сохранённых фланках: {len(relocated)} видов; нужны признаки вставки.",
         'fusion':f"Два независимых выравнивания разных фрагментов гена обнаружены у {len(mosaic)} видов; требуется валидация.",
         'unresolved':'Часть необходимых тестов не выполнена или свидетельства неоднозначны.'
@@ -63,8 +81,9 @@ def classify(report):
     observations={
         'de_novo':{'syntenic_noncoding_candidate_species':outgroup_noncds,
                    'coding_hits':cdss},
-        'dna_duplication':{'additional_loci':dup[:12]},
-        'retroposition':retro,
+        'dna_duplication':{'additional_loci':dup[:12], 'protein_paralogs':protein_paralogs[:10]},
+        'retroposition':{'dna_architecture':retro,'protein_parent_candidates':eligible_protein_parents[:10],
+                         'protein_homology_screen':proteins.get('status','not_run')},
         'transposition':{'displaced_loci_species':relocated},
         'fusion':{'mosaic_species':mosaic},
         'unresolved':{'errors':errors,'origin_screen_errors':errors2}
