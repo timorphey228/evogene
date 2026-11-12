@@ -21,7 +21,15 @@ if not all(status['ok'] for status in tools_status.values()):
 f=st.file_uploader('Целевой геном FASTA или FASTA одного гена',type=['fa','fna','fasta','gz'])
 species=st.selectbox('Целевой вид',list(PANEL))
 gene=st.text_input('ID выбранного гена (подпись отчёта)',value='FBgn0040343')
-count=st.slider('Количество родственных видов',1,5,2)
+selected_species=st.multiselect(
+    'Родственные виды (до 19 из панели исследования)',
+    options=PANEL[species],
+    default=PANEL[species][:2],
+    help='Не выбирайте только близких родственников: для оценки возраста важны и внешние группы. '
+         'Доступность сборок NCBI и аннотаций проверяется отдельно; каждый вид требует ресурсов.'
+)
+st.caption(f'Выбрано {len(selected_species)} видов. Фиксированного лимита 5 больше нет. '
+           'При большом количестве сборок загрузка и картирование могут быть длительными.')
 method=st.radio('Как выбрать ген?', ['Вставить последовательность ДНК','Указать координаты','FASTA содержит только один ген'])
 dna='';chrom='';start=end=None;strand='+'
 if method=='Вставить последовательность ДНК':
@@ -33,7 +41,7 @@ elif method=='Указать координаты':
     end=c2.number_input('Конец (включительно)',min_value=1,value=1000)
     strand=c3.selectbox('Цепь',['+','-'])
 if st.button('Скачать геномы NCBI и запустить анализ',type='primary',
-             disabled=not all(status['ok'] for status in tools_status.values())):
+             disabled=(not all(status['ok'] for status in tools_status.values()) or not selected_species)):
     if not f:st.error('Загрузите FASTA')
     else:
         st.session_state.pop('auto_report',None)
@@ -53,7 +61,8 @@ if st.button('Скачать геномы NCBI и запустить анали�
                 try:
                     st.session_state['auto_report']=analyze(
                         path,species,gene,gene_sequence=dna,
-                        chrom=chrom,start=start,end=end,strand=strand,count=count,
+                        chrom=chrom,start=start,end=end,strand=strand,
+                        relative_species=selected_species,
                         progress=update_progress)
                     live.update(label='Анализ завершён — смотрите результаты проверок',
                                 state='complete',expanded=False)
