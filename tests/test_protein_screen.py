@@ -50,8 +50,8 @@ class ProteinHomologyTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             folder=Path(temp)
             (folder/'proteins.faa').write_text(
-                '>XP_child.1\n'+'M'+'A'*85+'\n'
-                '>XP_parent.1\n'+'M'+'A'*83+'GG\n')
+                '>XP_child.1\n'+'M'+'ACDEFGHIKLMNPQRSTVWY'*5+'\n'
+                '>XP_parent.1\n'+'M'+'ACDEFGHIKLMNPQRSTVWY'*4+'GG\n')
             (folder/'genes.gff3').write_text(
                 'chr2\tX\tCDS\t101\t190\t.\t+\t0\tParent=rna-child;protein_id=XP_child.1\n'
                 'chrX\tX\tCDS\t1001\t1080\t.\t+\t0\tParent=rna-parent;protein_id=XP_parent.1\n'
