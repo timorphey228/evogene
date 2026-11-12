@@ -4,6 +4,7 @@ from pathlib import Path
 import streamlit as st
 from evogene.ncbi_auto import PANEL,analyze
 from evogene.tools import check_tools
+from evogene.analysis_notes import render_analysis_annotations
 from evogene.visualization import render_report_visualizations
 st.set_page_config(page_title='EvoGene Auto NCBI',layout='wide')
 st.title('EvoGene — автоматическая загрузка геномов NCBI')
@@ -73,6 +74,7 @@ if st.button('Скачать геномы NCBI и запустить анали�
 if 'auto_report' in st.session_state:
     r=st.session_state['auto_report']
     render_report_visualizations(r)
+    render_analysis_annotations(r)
     st.divider()
     st.subheader('Как проходил анализ')
     trace=r.get('pipeline_events',[])
