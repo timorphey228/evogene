@@ -299,6 +299,16 @@ def batch_as_markdown(batch):
         lines.append("### Этапы анализа")
         for step in entry["analysis_steps"]:
             lines.append(f"- {step['stage']} [{step['state']}]: {step['observation']}")
+        lines.extend(["", "### Вывод, а не наблюдение", "",
+                      "Допустимые альтернативы: " +
+                      ", ".join(entry["conclusion"]["hypotheses_not_resolved"]),
+                      "Статистические вероятности механизмов не рассчитывались.", "",
+                      "### Соответствие шести требованиям кейса", ""])
+        for criterion in entry["case_requirements"]:
+            lines.append(
+                f"- **{criterion['number']}. {criterion['title']}** "
+                f"[{criterion['status']}]: {criterion['evidence']}"
+            )
         lines.extend(["", "### Что необходимо дополнительно", ""])
         for missing in entry["missing_for_mechanistic_inference"]:
             lines.append("- " + missing)
