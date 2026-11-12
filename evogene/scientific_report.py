@@ -26,12 +26,20 @@ OUTCOMES = ("de_novo", "duplication", "ancient_origin", "other_mechanism",
 
 
 def _software_versions():
+    from subprocess import run
     try:
         biopython = version("biopython")
     except PackageNotFoundError:
         biopython = None
+    try:
+        repo = Path(__file__).resolve().parents[1]
+        proc = run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                   text=True, capture_output=True, timeout=3, check=False)
+        commit = proc.stdout.strip() if proc.returncode == 0 else None
+    except (OSError, TimeoutError):
+        commit = None
     return {"python": sys.version.split()[0], "biopython": biopython,
-            "analysis": SCHEMA}
+            "git_commit": commit, "analysis": SCHEMA}
 
 
 def hash_file(path, block_size=1024 * 1024):
@@ -83,6 +91,8 @@ def evidence_for_case(report):
                     (h.get("identity_aligned") or 0) >= .65 for h in complete),
                 "parameters": {"query_coverage_min": .6, "identity_min": .65,
                                "comparison": "Biopython local PairwiseAligner",
+                               "scoring": {"match": 2, "mismatch": -2,
+                                           "gap_open": -5, "gap_extend": -0.5},
                                "alignment_cost_guard_cells": 2_000_000},
             },
             "source": "Попарное локальное ДНК-выравнивание, вычисленное EvoGene",
