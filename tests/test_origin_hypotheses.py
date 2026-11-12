@@ -53,3 +53,33 @@ class OriginHypothesisTests(unittest.TestCase):
         r=assess_synteny(('A'*4000,'G'*4000),
              [h('overlaps_cds',start=1200,end=1400)],'genome','x')
         self.assertEqual(r['locus_status'],'homolog_overlaps_cds')
+
+class PipelineSummaryIntegrationTests(unittest.TestCase):
+    @patch('evogene.ncbi_auto.assess_synteny')
+    @patch('evogene.ncbi_auto.focal_flanks')
+    @patch('evogene.ncbi_auto.discover_target_locus')
+    @patch('evogene.ncbi_auto.annotate')
+    @patch('evogene.ncbi_auto.map_genome')
+    @patch('evogene.ncbi_auto.download')
+    def test_auto_analysis_runs_screens_then_distribution(
+            self,download,mapping,annotate,locate,flanks,synteny):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from evogene.ncbi_auto import analyze
+        download.side_effect=lambda name,cache: {
+            'species':name,'fasta':name+'.fa','gff':None,
+            'accession':'GCF_000000001.1'}
+        mapping.side_effect=lambda query,genome,species:[h('overlaps_cds')]
+        locate.return_value=(h(),[h(chrom='3R')])
+        flanks.return_value=('A'*4000,'G'*4000)
+        synteny.return_value={'status':'flanks_collinear',
+                              'locus_status':'homolog_overlaps_cds'}
+        with TemporaryDirectory() as folder:
+            f=Path(folder)/'gene.fasta'
+            f.write_text('>gene'+chr(10)+'ATG'*110+chr(10))
+            report=analyze(f,'Drosophila simulans','test_gene',count=2)
+        self.assertIn('synteny_evidence',report)
+        self.assertIn('duplication',report['origin_support']['tests'])
+        self.assertGreater(report['origin_support']['tests']['duplication']['support_points'],0)
+        self.assertEqual(round(sum(x['support_percent']
+                                 for x in report['origin_support']['options']),1),100.0)

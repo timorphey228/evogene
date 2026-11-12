@@ -47,7 +47,10 @@ if 'auto_report' in st.session_state:
             'Поддержка (%)': item['support_percent'],
             'Пояснение': item['explanation']
         } for item in support['options']], use_container_width=True, hide_index=True)
-        st.bar_chart({item['label']: item['support_percent'] for item in support['options']})
+        st.bar_chart([
+            {'Гипотеза': item['label'], 'Поддержка (%)': item['support_percent']}
+            for item in support['options']
+        ], x='Гипотеза', y='Поддержка (%)', horizontal=True)
         st.caption('Проценты НЕ являются статистически калиброванными вероятностями.')
         st.subheader('Проверки каждой гипотезы')
         for mechanism, outcome in support['tests'].items():
