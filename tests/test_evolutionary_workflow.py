@@ -112,9 +112,10 @@ class CandidateAndWorkflowTests(unittest.TestCase):
                              "not_established")
             self.assertEqual(report["genes"]["good"]["hypotheses"]["candidates"],
                              ["duplication"])
-            self.assertTrue((Path(folder)/"good"/"gene_tree.nwk").exists())
-            self.assertTrue((Path(folder)/"audit.jsonl").exists())
-            loaded=json.loads((Path(folder)/"run_report.json").read_text())
+            runfolder=Path(folder)/report["run_id"]
+            self.assertTrue((runfolder/"good"/"gene_tree.nwk").exists())
+            self.assertTrue((runfolder/"audit.jsonl").exists())
+            loaded=json.loads((runfolder/"run_report.json").read_text())
             self.assertEqual(loaded["summary"]["requested"],2)
         self.assertEqual(analyze.call_count,2)
 
