@@ -1,2 +1,4 @@
 streamlit>=1.32,<2
 biopython>=1.81,<2
+altair>=5,<7
+graphviz>=0.20,<1
