@@ -16,7 +16,7 @@ import json
 import re
 import sys
 
-from .case_data import analyze as analyze_case
+from .case_data import analyze_many as analyze_case_many
 
 SCHEMA = "evogene-case2-auditable-v1"
 
@@ -200,8 +200,8 @@ def make_case_gene_result(report, provenance):
 def analyze_case_batch(path, genes, method="raw", selected_species=None, source_name=None):
     """Per-gene reports in one auditable, non-falsified batch.
 
-    Repeated reading of the 54 MB source is acceptable for a small hackathon
-    selection, but large panels should use an indexed persistent backend.
+    Three complete scans of the research file; each selected gene then uses a
+    small extracted three-section input instead of rescanning the 54 MB source.
     """
     from .case_data import METHODS
 
@@ -225,17 +225,16 @@ def analyze_case_batch(path, genes, method="raw", selected_species=None, source_
         "software": _software_versions(),
     }
     result = []
-    raw_reports = {}
-    errors = []
+    raw_reports, per_gene_errors = analyze_case_many(
+        path, genes, method=method, selected_species=relatives
+    )
+    errors = [
+        {"gene_id": gene_id, "status": "failed", "reason": message}
+        for gene_id, message in per_gene_errors.items()
+    ]
     for gene_id in genes:
-        try:
-            data = analyze_case(path, gene_id, method=method,
-                                selected_species=relatives)
-            result.append(make_case_gene_result(data, provenance))
-            raw_reports[gene_id] = data
-        except (OSError, ValueError, UnicodeError) as exc:
-            errors.append({"gene_id": gene_id, "status": "failed",
-                           "reason": str(exc)})
+        if gene_id in raw_reports:
+            result.append(make_case_gene_result(raw_reports[gene_id], provenance))
     category_counts = dict(Counter(g["conclusion"]["category"] for g in result))
     return {
         "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(),
