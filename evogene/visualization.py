@@ -198,9 +198,13 @@ def render_report_visualizations(report):
             st.altair_chart(chart, use_container_width=True)
             st.dataframe(hits, use_container_width=True, hide_index=True)
         elif report.get("hits"):
-            st.caption("Предварительно отобранные Cactus-фрагменты: локальная "
-                       "идентичность и покрытие. Это не независимый поиск "
-                       "гомологов в целых геномах.")
+            if report.get("input_type") == "user_supplied_fasta_sequences":
+                st.caption("Локальные ДНК-сопоставления пользовательских FASTA; "
+                           "это не доказанная гомология, ортология или происхождение.")
+            else:
+                st.caption("Предварительно отобранные Cactus-фрагменты: локальная "
+                           "идентичность и покрытие. Это не независимый поиск "
+                           "гомологов в целых геномах.")
             measured = [hit for hit in report["hits"] if
                         hit.get("comparison_status") == "aligned" and
                         hit.get("identity_aligned") is not None]
