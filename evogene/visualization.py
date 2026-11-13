@@ -143,7 +143,8 @@ def newick_to_dot(newick, *, max_tips=200):
     if not tips or all(t.name is None for t in tips) or len(tips) > max_tips:
         raise ValueError(f"Newick needs 1–{max_tips} tips")
     lines = ["digraph Tree {", 'graph [rankdir=LR, bgcolor="transparent"];',
-             'node [fontname="Arial",fontsize=10];', 'edge [color="#94A3B8"];']
+             'node [fontname="Arial",fontsize=10,color="#FFFFFF",fontcolor="#FFFFFF",fillcolor="transparent"];',
+             'edge [color="#FFFFFF",fontcolor="#FFFFFF"];']
     counter = [0]
 
     def visit(node):
