@@ -6,7 +6,6 @@ paper. It never claims that the fallback NJ tree proves gene ancestry.
 """
 from __future__ import annotations
 
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -43,24 +42,130 @@ STATUS = {"candidate": "Обнаружен диагностический при
 
 
 def _style():
+    """СИНТЕЗ 2026 visual language: restrained dark layout and functional accents."""
     st.markdown("""
 <style>
-  .block-container {max-width: 1390px; padding-top: 1.8rem; padding-bottom: 5rem;}
-  h1,h2,h3 {letter-spacing:-0.035em;}
-  h1 {font-weight:750 !important;}
-  [data-testid="stMetric"] {border:1px solid rgba(128,145,164,.24);
-      background:rgba(124,138,164,.055);padding:1rem;border-radius:16px;}
-  .evo-intro{padding:26px 30px;border:1px solid rgba(115,141,184,.28);
-      border-radius:22px;background:linear-gradient(125deg,rgba(53,113,172,.16),rgba(68,157,124,.10));
-      margin-bottom:20px;}
-  .evo-overline{font-size:.75rem;letter-spacing:.12em;color:#3F9E84;
-      font-weight:700;text-transform:uppercase;}
-  .evo-intro h1{font-size:2.5rem;margin:6px 0 5px;}
-  .evo-intro p{opacity:.75;margin:0;}
-  .evo-phase{font-weight:650;letter-spacing:.02em;font-size:.9rem;
-      padding:.65rem 0;border-bottom:1px solid rgba(120,140,155,.2);}
-  .evo-stamp{border-left:3px solid #2D9B82;padding-left:1rem;margin:1rem 0;}
-  div[data-testid="stTabs"] button {border-radius:8px;}
+  /* Brand tokens from the provided СИНТЕЗ presentation template. */
+  :root {
+    --evo-bg: #0F1010;
+    --evo-paper: #E6E6E6;
+    --evo-lime: #C4F747;
+    --evo-blue: #7C99FD;
+    --evo-lilac: #E0A9FB;
+    --evo-border: rgba(230,230,230,.18);
+    --evo-panel: #191B1C;
+  }
+  html, body, .stApp, [data-testid="stAppViewContainer"] {
+    background-color: var(--evo-bg) !important;
+    color: var(--evo-paper);
+  }
+  [data-testid="stAppViewContainer"] {
+    background-image:
+      linear-gradient(rgba(230,230,230,.038) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(230,230,230,.038) 1px, transparent 1px),
+      radial-gradient(ellipse at 94% 5%, rgba(124,153,253,.08), transparent 34%);
+    background-size: 84px 84px, 84px 84px, 100% 100%;
+  }
+  [data-testid="stHeader"] {background: rgba(15,16,16,.91) !important;}
+  .block-container {max-width:1360px;padding-top:1.65rem;padding-bottom:4rem;}
+  .stApp, .stApp p, .stApp label, .stApp input, .stApp button,
+  .stApp textarea, .stApp [data-testid="stMarkdownContainer"] {
+    font-family: "IBM Plex Mono","SFMono-Regular","Menlo","Consolas",monospace;
+  }
+  h1,h2,h3 {letter-spacing:-.045em !important;color:var(--evo-paper);}
+  h2 {font-size:1.35rem !important;}
+  h3 {font-size:1.08rem !important;}
+  .evo-hero {
+    position:relative;isolation:isolate;overflow:hidden;
+    background:linear-gradient(113deg, #1B1D1E 0%, #121415 72%, #171928 100%);
+    border:1px solid var(--evo-border);border-radius:14px;
+    padding:31px 35px 34px;margin-bottom:21px;
+  }
+  .evo-hero:before {
+    content:"";position:absolute;inset:0;z-index:-1;
+    background-image:
+      linear-gradient(rgba(230,230,230,.048) 1px, transparent 1px),
+      linear-gradient(90deg,rgba(230,230,230,.048) 1px,transparent 1px);
+    background-size:81px 81px;
+    -webkit-mask-image:linear-gradient(90deg, transparent 13%,black);
+    mask-image:linear-gradient(90deg,transparent 13%,black);
+  }
+  .evo-hero:after {
+    content:"+";position:absolute;right:4.5%;top:8%;
+    color:var(--evo-blue);font-size:6.5rem;line-height:1;
+    transform:rotate(-8deg);opacity:.28;pointer-events:none;
+  }
+  .evo-meta {display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    color:var(--evo-paper);font-size:.77rem;letter-spacing:.09em;}
+  .evo-meta em {font-style:normal;color:var(--evo-lime);}
+  .evo-meta .evo-meta-divider {color:var(--evo-lime);}
+  .evo-hero h1 {font-size:clamp(2.25rem,5.6vw,4.2rem);font-weight:750;
+    line-height:1.09;margin:20px 0 10px;letter-spacing:-.065em;}
+  .evo-hero h1 span {color:var(--evo-lime);}
+  .evo-hero p {max-width:780px;margin:0;color:#D3D4D7;
+    font-size:1rem;line-height:1.75;}
+  .evo-tags {margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;}
+  .evo-tags span {
+    padding:7px 10px;border:1px solid rgba(196,247,71,.45);
+    color:var(--evo-paper);font-size:.69rem;border-radius:5px;white-space:nowrap;
+  }
+  .evo-tags span:first-child {background:var(--evo-lime);
+    color:#0F1010;border-color:var(--evo-lime);font-weight:750;}
+  .evo-quicknote {margin:-3px 0 21px;padding:11px 15px;
+    border-left:2px solid var(--evo-blue);background:rgba(124,153,253,.055);
+    color:#CFD3DC;font-size:.79rem;}
+  .evo-quicknote strong {color:var(--evo-blue);}
+  div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    border-bottom:1px solid var(--evo-border);gap:5px;flex-wrap:wrap;
+  }
+  div[data-testid="stTabs"] button[role="tab"] {
+    border-radius:5px 5px 0 0;color:#CFD0D3 !important;
+    font-weight:650 !important;font-size:.79rem;padding:10px 14px;
+    white-space:normal;
+  }
+  div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    background:rgba(196,247,71,.085);color:var(--evo-lime) !important;
+    border-bottom:2px solid var(--evo-lime) !important;
+  }
+  [data-testid="stMetric"] {
+    border:1px solid var(--evo-border);border-radius:10px;
+    background:var(--evo-panel);padding:17px 18px 14px;
+  }
+  [data-testid="stMetricValue"] {color:var(--evo-lime);letter-spacing:-.05em;}
+  [data-testid="stMetricLabel"] {color:#B8BAC0;}
+  [data-testid="stFileUploader"] section,
+  [data-testid="stExpander"],[data-testid="stDataFrame"] {
+    border-radius:9px !important;border-color:var(--evo-border) !important;
+  }
+  [data-testid="stFileUploader"] section {
+    background:rgba(124,153,253,.045) !important;
+    border:1px dashed rgba(124,153,253,.53) !important;
+  }
+  div.stButton > button[kind="primary"],
+  div.stButton > button[data-testid="stBaseButton-primary"] {
+    background:var(--evo-lime) !important;border-color:var(--evo-lime) !important;
+    color:var(--evo-bg) !important;border-radius:6px;font-weight:750;
+    box-shadow:none !important;
+  }
+  div.stButton > button[kind="primary"]:hover {
+    background:#D6FF72 !important;border-color:#D6FF72 !important;
+  }
+  [data-testid="stDownloadButton"] button {
+    border-color:var(--evo-blue);color:var(--evo-paper);
+    background:rgba(124,153,253,.08);border-radius:6px;
+  }
+  [data-testid="stDownloadButton"] button:hover {
+    border-color:var(--evo-lime);color:var(--evo-lime);
+  }
+  .stApp a {color:var(--evo-blue);}
+  hr {border-color:var(--evo-border);}
+  @media(max-width:700px) {
+    .evo-hero {padding:24px 19px;}
+    .evo-hero:after {font-size:4rem;right:-1%;opacity:.12;}
+    .evo-meta {font-size:.66rem;}
+    .evo-hero p {font-size:.85rem;}
+    .block-container {padding-top:1rem;}
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -172,7 +277,6 @@ def _run(file,focal,chosen,te,phylogeny,cache):
             except Exception as exc:
                 status.update(label="Не удалось запустить исследование",state="error")
                 st.error(str(exc))
-    return
 
 
 def _hypothesis_summary_rows(hypotheses):
@@ -363,12 +467,24 @@ def main():
     st.set_page_config(page_title="EvoGene · происхождение генов",page_icon="🧬",
                        layout="wide",initial_sidebar_state="collapsed")
     _style()
-    st.markdown('<div class="evo-intro"><div class="evo-overline">ITMO · СИНТЕЗ · Evolutionary genomics</div>'
-                '<h1>EvoGene</h1><p>От генетической последовательности — к проверяемым '
-                'гипотезам происхождения, дереву и воспроизводимому отчёту.</p></div>',
-                unsafe_allow_html=True)
-    st.info("Научная модель: Peng & Zhao (2024). Текущий конвейер — аналог для "
-            "скрининга, не дословное воспроизведение Cactus/HAL/Spaln/Genewise.")
+    st.markdown(
+        '<section class="evo-hero" aria-label="EvoGene · СИНТЕЗ 2026">'
+        '<div class="evo-meta"><span>ХИМБИО-ХАКАТОН</span>'
+        '<span class="evo-meta-divider">×</span><span>ПИШ ИТМО</span>'
+        '<em>[ КЕЙС 02 ]</em></div>'
+        '<h1>EVO<span>GENE</span></h1>'
+        '<p>Реконструкция эволюционного происхождения генов. '
+        'От исходной ДНК — к сопоставлению геномов, филогенетическому дереву, '
+        'альтернативным гипотезам и проверяемым доказательствам.</p>'
+        '<div class="evo-tags"><span>01 · ГЕНЫ</span><span>02 · ГЕНОМЫ</span>'
+        '<span>03 · ДЕРЕВО</span><span>04 · ГИПОТЕЗЫ</span>'
+        '<span>05 · АУДИТ</span></div></section>',
+        unsafe_allow_html=True)
+    st.markdown(
+        '<div class="evo-quicknote"><strong>&gt;&gt; НАУЧНОЕ ОГРАНИЧЕНИЕ</strong> · '
+        'Скрининг по мотивам Peng &amp; Zhao (2024), а не полное '
+        'воспроизведение Cactus / HAL / Genewise / Spaln.</div>',
+        unsafe_allow_html=True)
     input_tab, result_tab, log_tab, method_tab=st.tabs([
         "01 · Загрузить и исследовать", "02 · Результаты", "03 · Журнал",
         "04 · Методика и ограничения"
