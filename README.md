@@ -51,6 +51,89 @@ python -m streamlit run auto_app.py
 
 Проверка доступности внешних программ выполняется интерфейсом. Без `datasets` и `minimap2` автоматическая загрузка/сопоставление геномов не запускается.
 
+## Установка NCBI Datasets CLI и minimap2 на новом компьютере
+
+Если в EvoGene написано `datasets: не найден` или `minimap2: не найден`, кнопка **«Запустить исследование»** будет недоступна. Это **не ошибка FASTA**: приложению нужны две отдельные программы, которые **не устанавливаются** командой `pip install -r requirements.txt`.
+
+- **`datasets`** — получает референсные геномы и аннотации из NCBI.
+- **`minimap2`** — сопоставляет ген-кандидат с референсными геномами.
+
+### macOS (MacBook с Apple Silicon или Intel) — рекомендуемый способ
+
+Откройте приложение «Терминал». Установите [Homebrew](https://brew.sh/), если его ещё нет; проверьте командой `brew --version`. После этого выполните:
+
+```bash
+# 1. Установить minimap2 из официального Homebrew
+brew install minimap2
+
+# 2. Установить официальный бинарный NCBI Datasets CLI для macOS
+mkdir -p "$HOME/bin"
+curl -fL --retry 3 \
+  "https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/mac/datasets" \
+  -o "$HOME/bin/datasets"
+chmod +x "$HOME/bin/datasets"
+
+# 3. Сделать datasets доступным из текущего терминала
+export PATH="$HOME/bin:$PATH"
+
+# 4. Проверить установку
+datasets version
+minimap2 --version
+```
+
+**Зачем `~/bin`?** EvoGene ищет `datasets` в этой папке даже тогда, когда её нет в переменной `PATH`. Чтобы команда `datasets` работала и в **новом** окне терминала (zsh), можно добавить путь в настройки оболочки:
+
+```bash
+touch "$HOME/.zshrc"
+grep -qxF 'export PATH="$HOME/bin:$PATH"' "$HOME/.zshrc" || \
+  echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.zshrc"
+source "$HOME/.zshrc"
+```
+
+Проверьте местонахождение исполняемых файлов и их доступность **из самого Python-проекта**:
+
+```bash
+command -v datasets
+command -v minimap2
+
+cd evogene  # если вы ещё не в каталоге проекта
+python3 -c "from evogene.tools import check_tools; print(check_tools())"
+```
+
+Для обоих инструментов в результате `check_tools()` должно быть `'ok': True`. Путь к репозиторию может отличаться; команда `cd evogene` выполняется из его родительской папки, а если вы уже в проекте — пропустите её.
+
+### Если установлен Conda / Miniforge
+
+Альтернативный официальный способ — установить оба инструмента из `conda-forge` **в то окружение Conda, из которого будете запускать EvoGene**:
+
+```bash
+conda install -c conda-forge ncbi-datasets-cli minimap2
+datasets version
+minimap2 --version
+```
+
+При использовании `venv` вместо Conda предпочтителен способ macOS выше: бинарные программы не зависят от Python-виртуального окружения.
+
+### Для более надёжной филогенетики (необязательно)
+
+```bash
+brew install mafft iqtree
+mafft --version
+iqtree2 --version  # в некоторых версиях команда называется iqtree
+```
+
+При наличии **MAFFT + IQ-TREE 2** EvoGene пытается построить ML-дерево с поддержкой ветвей. Если они отсутствуют, программа может показать **только предварительную NJ-кластеризацию по 7-мерам без поддержки**, что не является подтверждённой филогенией гена.
+
+### Если EvoGene всё ещё пишет «не найден»
+
+1. Завершите текущий Streamlit-процесс сочетанием **Ctrl+C** и запустите снова: `python -m streamlit run auto_app.py`.
+2. Убедитесь, что обе команды `datasets version` и `minimap2 --version` работают **в том терминале, из которого запускается Streamlit**.
+3. Выполните `python3 -c "from evogene.tools import check_tools; print(check_tools())"`. В нём виден реальный путь к найденному бинарному файлу или причина ошибки.
+4. Если `brew` не находится, проверьте, установлен ли Homebrew, и настройте `PATH` по инструкции `brew shellenv` для вашей архитектуры Mac.
+5. `(.venv)` перед приглашением терминала означает, что виртуальное окружение, вероятно, уже активировано; повторный `source .venv/bin/activate` может быть не нужен.
+
+Официальные инструкции: [NCBI Datasets — Download and Install](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/command-line-start/) и [Homebrew minimap2](https://formulae.brew.sh/formula/minimap2).
+
 ## Сценарий исследования
 
 1. **Загрузка.** Выберите FASTA с несколькими кандидатными генами. Программа принимает ДНК `A/C/G/T/N`, длина одной записи — **30–100 000 нт**. Идентификаторы записей должны быть уникальными.
