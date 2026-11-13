@@ -1,10 +1,19 @@
 """UI smoke tests for redesigned EvoGene research dashboard."""
 import unittest
 
-from evogene.dashboard import _bundle, _hypothesis_summary_rows
+from evogene.dashboard import _bundle, _hypothesis_summary_rows, _style
 
 
 class DashboardTests(unittest.TestCase):
+    def test_comparison_species_labels_have_contrasting_black_text(self):
+        from unittest.mock import patch
+        with patch("evogene.dashboard.st.markdown") as render:
+            _style()
+        css=render.call_args.args[0]
+        self.assertIn('[data-testid="stMultiSelect"] [data-baseweb="tag"]',css)
+        self.assertIn("background-color: var(--evo-lime) !important",css)
+        self.assertIn("color: #0F1010 !important",css)
+
     def test_zip_exports_tree_and_timestamps(self):
         from io import BytesIO
         from zipfile import ZipFile
