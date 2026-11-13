@@ -142,9 +142,11 @@ def newick_to_dot(newick, *, max_tips=200):
     tips = tree.get_terminals()
     if not tips or all(t.name is None for t in tips) or len(tips) > max_tips:
         raise ValueError(f"Newick needs 1–{max_tips} tips")
-    lines = ["digraph Tree {", 'graph [rankdir=LR, bgcolor="transparent"];',
-             'node [fontname="Arial",fontsize=10,color="#FFFFFF",fontcolor="#FFFFFF",fillcolor="transparent"];',
-             'edge [color="#FFFFFF",fontcolor="#FFFFFF"];']
+    # An explicit dark SVG background prevents white labels from disappearing
+    # when a browser or Streamlit forces a light chart canvas.
+    lines = ["digraph Tree {", 'graph [rankdir=LR,bgcolor="#0F1010",fontcolor="#FFFFFF"];',
+             'node [fontname="Arial",fontsize=10,style="filled",fillcolor="#0F1010",color="#FFFFFF",fontcolor="#FFFFFF",penwidth=1.6];',
+             'edge [color="#FFFFFF",fontcolor="#FFFFFF",penwidth=1.6];']
     counter = [0]
 
     def visit(node):
@@ -158,12 +160,16 @@ def newick_to_dot(newick, *, max_tips=200):
             # interpretation depends on the program that built the tree.
             label = (str(node.name) if node.name else "") if node.confidence is None else f"{node.confidence:g}"
             shape = "circle"
-        lines.append(f'{node_id} [label={json.dumps(str(label))},shape={shape}];')
+        lines.append(
+            f'{node_id} [label={json.dumps(str(label))},shape={shape},'
+            'fontcolor="#FFFFFF",color="#FFFFFF",fillcolor="#0F1010"];'
+        )
         for child in node.clades:
             child_id = visit(child)
             length = "" if child.branch_length is None else f"{child.branch_length:.4g}"
             lines.append(
-                f'{node_id} -> {child_id} [label={json.dumps(length)}];'
+                f'{node_id} -> {child_id} [label={json.dumps(length)},'
+                'color="#FFFFFF",fontcolor="#FFFFFF"];'
             )
         return node_id
 
