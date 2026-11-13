@@ -6,13 +6,11 @@ Progressive Cactus/HAL/Genewise/Spaln/UniProt calibrated workflow.
 """
 from __future__ import annotations
 
-from collections import Counter
 from datetime import datetime, timezone
 from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
 from io import StringIO
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import json
 import re
 import shutil
@@ -254,7 +252,6 @@ def run_project(fasta_input, focal_species, comparison_species, *,
         log(gene_id,"input","completed",
             f"FASTA validated; length={gene['length_nt']}nt; checksum="
             f"{sha256(gene['dna'].encode()).hexdigest()}")
-        events=[]
         def callback(item):
             stamp=item.get("timestamp_utc",utcnow())
             entry={"timestamp_utc":stamp,"gene_id":gene_id,
@@ -262,7 +259,6 @@ def run_project(fasta_input, focal_species, comparison_species, *,
                    "detail":item.get("detail","")}
             if item.get("species"):entry["species"]=item["species"]
             audit.append(entry)
-            events.append(entry)
             if progress:progress(entry)
         try:
             core=ncbi_auto.analyze(
