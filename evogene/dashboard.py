@@ -127,6 +127,16 @@ def _style():
     background:rgba(196,247,71,.085);color:var(--evo-lime) !important;
     border-bottom:2px solid var(--evo-lime) !important;
   }
+  /* Multiselect species chips: black labels/icons on lime backgrounds. */
+  [data-testid="stMultiSelect"] [data-baseweb="tag"] {
+    background-color: var(--evo-lime) !important;
+    color: #0F1010 !important;
+  }
+  [data-testid="stMultiSelect"] [data-baseweb="tag"] *,
+  [data-testid="stMultiSelect"] [data-baseweb="tag"] svg {
+    color: #0F1010 !important;
+    fill: #0F1010 !important;
+  }
   [data-testid="stMetric"] {
     border:1px solid var(--evo-border);border-radius:10px;
     background:var(--evo-panel);padding:17px 18px 14px;
@@ -215,6 +225,7 @@ def _input_panel():
         default=[s for s in ("Drosophila simulans","Drosophila yakuba",
                             "Drosophila ananassae") if s in PANEL[focal]]
         chosen=st.multiselect("Геномы для сравнения",PANEL[focal],default=default,
+                              key="evo_comparison_genomes",
                               help="Добавьте близкие виды и внешние группы. "
                                    "Наличие гомолога вне синтенного локуса проверяется отдельно.")
         with st.expander("Конкретные версии геномных сборок",expanded=False):
