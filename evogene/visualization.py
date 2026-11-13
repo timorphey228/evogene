@@ -171,7 +171,7 @@ def newick_to_dot(newick, *, max_tips=200):
     return "\n".join(lines)
 
 
-def render_report_visualizations(report):
+def render_report_visualizations(report, *, genomics_only=False):
     """Interactive evidence panels. No inferred phylogeny is invented."""
     import streamlit as st
     import altair as alt
@@ -179,9 +179,14 @@ def render_report_visualizations(report):
     st.header("Визуальный анализ доказательств")
     st.caption("Изображены только результаты измерений или отдельно загруженные данные. "
                "DNA-сходство не доказывает ортологию или эволюционное происхождение.")
-    tab_align, tab_synteny, tab_orf, tab_gap, tab_mechanisms, tab_tree = st.tabs([
-        "Выравнивания", "Синтения", "ORF", "Вставки/делеции", "Гипотезы и неопределённость", "Филогения"
-    ])
+    # In the research dashboard, hypotheses and tree have their own result
+    # tabs. Do not display them again inside "Геномные данные".
+    labels = ["Выравнивания", "Синтения", "ORF", "Вставки/делеции"]
+    if genomics_only:
+        tab_align, tab_synteny, tab_orf, tab_gap = st.tabs(labels)
+    else:
+        tab_align, tab_synteny, tab_orf, tab_gap, tab_mechanisms, tab_tree = st.tabs(
+            labels + ["Гипотезы и неопределённость", "Филогения"])
     with tab_align:
         hits = alignment_blocks(report)
         if hits:
@@ -328,70 +333,71 @@ def render_report_visualizations(report):
             st.dataframe(rows, use_container_width=True, hide_index=True)
         else:
             st.info("CIGAR операции не предоставлены. Геномные инделы не реконструированы.")
-    with tab_mechanisms:
-        rows = mechanism_rows(report)
-        if rows:
-            st.caption("Цвет и статус отражают выполненные диагностические проверки, "
-                       "но НЕ вычисленные вероятности происхождения.")
-            state_order = ["candidate", "partial_signal", "no_signal", "not_assessed"]
-            color = alt.Scale(domain=state_order,
-                range=["#16815D", "#D29D3C", "#8394A8", "#CBD5E1"])
-            chart = alt.Chart(alt.Data(values=rows)).mark_rect(
-                stroke="white", strokeWidth=1).encode(
-                x=alt.X("status:N", sort=state_order, title="Статус проверки"),
-                y=alt.Y("mechanism:N", title="Механизм"),
-                color=alt.Color("status:N", scale=color, legend=None),
-                tooltip=["mechanism:N", "status:N", "signals:Q", "interpretation:N"],
-            ).properties(height=max(160, 38 * len(rows)))
-            st.altair_chart(chart, use_container_width=True)
-            st.dataframe(rows, use_container_width=True, hide_index=True)
-            completeness = (report.get("mechanism_report") or {}).get("completeness") or {}
-            assessed = completeness.get("assessed", 0)
-            total = completeness.get("total", 0)
-            st.metric("Оценено диагностических механизмов", f"{assessed}/{total}")
-            if completeness.get("not_assessed"):
-                st.warning("Не оценены: " + ", ".join(completeness["not_assessed"]))
-            if completeness.get("processing_errors"):
-                st.error("Ошибки обработки: " + str(completeness["processing_errors"]))
-        else:
-            st.info("Матрица диагностических проверок отсутствует для этого режима.")
-        events = report.get("pipeline_events") or []
-        if events:
-            final = {}
-            for event in events:
-                final[(event.get("stage"), event.get("species"))] = event
-            st.markdown("**Фактически выполненные этапы**")
-            st.dataframe(list(final.values()), use_container_width=True, hide_index=True)
-    with tab_tree:
-        tree = report.get("phylogeny") or {}
-        if tree.get("newick"):
-            st.caption("Показана реально вычисленная топология. Метод: " +
-                       str(tree.get("method","не указан")) +
-                       ". Дерево не укоренено; геномное сходство не доказывает ортологию.")
-            if tree.get("status")=="inferred_exploratory":
-                st.warning("Предварительная дистанционная кластеризация; "
-                           "не является подтверждённым деревом генного семейства.")
-            try:
-                st.graphviz_chart(newick_to_dot(tree["newick"]),use_container_width=True)
-            except (ValueError,TypeError,AttributeError) as exc:
-                st.error("Ошибка отображения Newick: " + str(exc))
-            st.download_button("Скачать вычисленный Newick",tree["newick"],
-                               file_name=str(report.get("gene_id","gene"))+".nwk",
-                               mime="text/plain",key="computed_evo_tree")
-        else:
-            st.caption("Для дерева нужны действительно гомологичные последовательности. "
-                       "При отсутствии данных можно загрузить проверенное Newick извне.")
-            tree_file = st.file_uploader("Newick дерево (.nwk, .treefile, .newick)",
-                                         type=["nwk", "newick", "treefile", "tree", "txt"],
-                                         key="evo_tree")
-            if tree_file is None:
-                st.info("Филогенетическое дерево не рассчитано текущим анализом. "
-                        "Нет основания рисовать вымышленную топологию или поддержку.")
+    if not genomics_only:
+        with tab_mechanisms:
+            rows = mechanism_rows(report)
+            if rows:
+                st.caption("Цвет и статус отражают выполненные диагностические проверки, "
+                           "но НЕ вычисленные вероятности происхождения.")
+                state_order = ["candidate", "partial_signal", "no_signal", "not_assessed"]
+                color = alt.Scale(domain=state_order,
+                    range=["#16815D", "#D29D3C", "#8394A8", "#CBD5E1"])
+                chart = alt.Chart(alt.Data(values=rows)).mark_rect(
+                    stroke="white", strokeWidth=1).encode(
+                    x=alt.X("status:N", sort=state_order, title="Статус проверки"),
+                    y=alt.Y("mechanism:N", title="Механизм"),
+                    color=alt.Color("status:N", scale=color, legend=None),
+                    tooltip=["mechanism:N", "status:N", "signals:Q", "interpretation:N"],
+                ).properties(height=max(160, 38 * len(rows)))
+                st.altair_chart(chart, use_container_width=True)
+                st.dataframe(rows, use_container_width=True, hide_index=True)
+                completeness = (report.get("mechanism_report") or {}).get("completeness") or {}
+                assessed = completeness.get("assessed", 0)
+                total = completeness.get("total", 0)
+                st.metric("Оценено диагностических механизмов", f"{assessed}/{total}")
+                if completeness.get("not_assessed"):
+                    st.warning("Не оценены: " + ", ".join(completeness["not_assessed"]))
+                if completeness.get("processing_errors"):
+                    st.error("Ошибки обработки: " + str(completeness["processing_errors"]))
             else:
+                st.info("Матрица диагностических проверок отсутствует для этого режима.")
+            events = report.get("pipeline_events") or []
+            if events:
+                final = {}
+                for event in events:
+                    final[(event.get("stage"), event.get("species"))] = event
+                st.markdown("**Фактически выполненные этапы**")
+                st.dataframe(list(final.values()), use_container_width=True, hide_index=True)
+        with tab_tree:
+            tree = report.get("phylogeny") or {}
+            if tree.get("newick"):
+                st.caption("Показана реально вычисленная топология. Метод: " +
+                           str(tree.get("method","не указан")) +
+                           ". Дерево не укоренено; геномное сходство не доказывает ортологию.")
+                if tree.get("status")=="inferred_exploratory":
+                    st.warning("Предварительная дистанционная кластеризация; "
+                               "не является подтверждённым деревом генного семейства.")
                 try:
-                    dot = newick_to_dot(tree_file.getvalue().decode("utf-8-sig"))
-                    st.graphviz_chart(dot, use_container_width=True)
-                    st.download_button("Экспортировать Newick", tree_file.getvalue(),
-                        file_name="uploaded_gene_tree.nwk", mime="text/plain")
-                except (UnicodeDecodeError, ValueError, TypeError, AttributeError, IndexError) as exc:
-                    st.error(f"Некорректное дерево: {exc}")
+                    st.graphviz_chart(newick_to_dot(tree["newick"]),use_container_width=True)
+                except (ValueError,TypeError,AttributeError) as exc:
+                    st.error("Ошибка отображения Newick: " + str(exc))
+                st.download_button("Скачать вычисленный Newick",tree["newick"],
+                                   file_name=str(report.get("gene_id","gene"))+".nwk",
+                                   mime="text/plain",key="computed_evo_tree")
+            else:
+                st.caption("Для дерева нужны действительно гомологичные последовательности. "
+                           "При отсутствии данных можно загрузить проверенное Newick извне.")
+                tree_file = st.file_uploader("Newick дерево (.nwk, .treefile, .newick)",
+                                             type=["nwk", "newick", "treefile", "tree", "txt"],
+                                             key="evo_tree")
+                if tree_file is None:
+                    st.info("Филогенетическое дерево не рассчитано текущим анализом. "
+                            "Нет основания рисовать вымышленную топологию или поддержку.")
+                else:
+                    try:
+                        dot = newick_to_dot(tree_file.getvalue().decode("utf-8-sig"))
+                        st.graphviz_chart(dot, use_container_width=True)
+                        st.download_button("Экспортировать Newick", tree_file.getvalue(),
+                            file_name="uploaded_gene_tree.nwk", mime="text/plain")
+                    except (UnicodeDecodeError, ValueError, TypeError, AttributeError, IndexError) as exc:
+                        st.error(f"Некорректное дерево: {exc}")
