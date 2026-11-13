@@ -10,9 +10,13 @@ class DashboardTests(unittest.TestCase):
         with patch("evogene.dashboard.st.markdown") as render:
             _style()
         css=render.call_args.args[0]
-        self.assertIn('[data-testid="stMultiSelect"] [data-baseweb="tag"]',css)
-        self.assertIn("background-color: var(--evo-lime) !important",css)
-        self.assertIn("color: #0F1010 !important",css)
+        self.assertIn('span[data-baseweb="tag"] > span', css)
+        self.assertIn('span[data-baseweb="tag"] span[title]', css)
+        self.assertIn("background-color: #C4F747 !important", css)
+        self.assertIn("color: #0F1010 !important", css)
+        self.assertIn("-webkit-text-fill-color: #0F1010 !important", css)
+        self.assertIn('[data-testid="stGraphVizChart"] svg .node text', css)
+        self.assertIn("fill: #FFFFFF !important", css)
 
     def test_zip_exports_tree_and_timestamps(self):
         from io import BytesIO
