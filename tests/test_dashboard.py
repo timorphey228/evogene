@@ -1,7 +1,7 @@
 """UI smoke tests for redesigned EvoGene research dashboard."""
 import unittest
 
-from evogene.dashboard import _bundle
+from evogene.dashboard import _bundle, _hypothesis_summary_rows
 
 
 class DashboardTests(unittest.TestCase):
@@ -25,6 +25,25 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("geneA/gene_tree.nwk",names)
             self.assertIn("geneA/msa.fasta",names)
             self.assertIn("timestamp_utc",archive.read("audit.jsonl").decode())
+
+    def test_hypothesis_summary_counts_and_qualitative_confidence(self):
+        hypotheses = [
+            {"label": "Дупликация", "status": "candidate",
+             "arguments": ["Дополнительная копия", "Белковый гомолог"]},
+            {"label": "De novo", "status": "partial_signal",
+             "arguments": ["Синтенный некодирующий участок"]},
+            {"label": "Ретропозиция", "status": "no_signal", "arguments": []},
+            {"label": "Транспозон", "status": "not_assessed", "arguments": []},
+            {"label": "Слияние", "status": "failed", "arguments": None},
+        ]
+        rows = _hypothesis_summary_rows(hypotheses)
+        self.assertEqual(len(rows), 5)
+        self.assertEqual([r["Поддерживающих признаков"] for r in rows],
+                         [2, 1, 0, 0, 0])
+        self.assertEqual(rows[0]["Уверенность системы"], "Предварительная")
+        self.assertIn("Низкая", rows[1]["Уверенность системы"])
+        self.assertEqual(rows[3]["Уверенность системы"], "Не определена")
+        self.assertTrue(all("%" not in str(r["Уверенность системы"]) for r in rows))
 
     def test_initial_app_renders_without_uploaded_data(self):
         try:
