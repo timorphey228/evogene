@@ -127,15 +127,55 @@ def _style():
     background:rgba(196,247,71,.085);color:var(--evo-lime) !important;
     border-bottom:2px solid var(--evo-lime) !important;
   }
-  /* Multiselect species chips: black labels/icons on lime backgrounds. */
-  [data-testid="stMultiSelect"] [data-baseweb="tag"] {
-    background-color: var(--evo-lime) !important;
+  /* BaseWeb uses SPAN tags for selected species; the previous selector
+     was tied to a wrapper that is not stable across Streamlit versions.
+     Target both span[data-baseweb=tag] and its own nested text spans. */
+  .st-key-evo_comparison_genomes [data-baseweb="tag"],
+  .stMultiSelect [data-baseweb="tag"],
+  [data-testid="stMultiSelect"] [data-baseweb="tag"],
+  span[data-baseweb="tag"] {
+    background-color: #C4F747 !important;
     color: #0F1010 !important;
+    -webkit-text-fill-color: #0F1010 !important;
   }
+  .st-key-evo_comparison_genomes [data-baseweb="tag"] *,
+  .stMultiSelect [data-baseweb="tag"] *,
   [data-testid="stMultiSelect"] [data-baseweb="tag"] *,
-  [data-testid="stMultiSelect"] [data-baseweb="tag"] svg {
+  span[data-baseweb="tag"] > span,
+  span[data-baseweb="tag"] span[title],
+  span[data-baseweb="tag"] button,
+  span[data-baseweb="tag"] svg {
     color: #0F1010 !important;
+    -webkit-text-fill-color: #0F1010 !important;
+  }
+  span[data-baseweb="tag"] svg,
+  span[data-baseweb="tag"] svg path {
     fill: #0F1010 !important;
+    stroke: #0F1010 !important;
+  }
+  /* Tree: keep SVG labels and shapes visible regardless of theme CSS. */
+  [data-testid="stGraphVizChart"] svg .node text,
+  [data-testid="stGraphVizChart"] svg .edge text,
+  .stGraphVizChart svg text {
+    fill: #FFFFFF !important;
+    color: #FFFFFF !important;
+  }
+  [data-testid="stGraphVizChart"] svg .node ellipse,
+  [data-testid="stGraphVizChart"] svg .node polygon,
+  [data-testid="stGraphVizChart"] svg .node rect,
+  [data-testid="stGraphVizChart"] svg .node path,
+  .stGraphVizChart svg .node polygon,
+  .stGraphVizChart svg .node ellipse {
+    stroke: #FFFFFF !important;
+  }
+  [data-testid="stGraphVizChart"] svg .edge path,
+  [data-testid="stGraphVizChart"] svg .edge polygon,
+  .stGraphVizChart svg .edge path {
+    stroke: #FFFFFF !important;
+  }
+  [data-testid="stGraphVizChart"] svg .edge polygon,
+  .stGraphVizChart svg .edge polygon {
+    fill: #FFFFFF !important;
   }
   [data-testid="stMetric"] {
     border:1px solid var(--evo-border);border-radius:10px;
