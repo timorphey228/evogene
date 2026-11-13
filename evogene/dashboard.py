@@ -428,7 +428,7 @@ def _results(report):
                  "Ограничение":item.get("reason",item.get("interpretation"))}
                 for species,item in orf_rows.items()
             ],hide_index=True,use_container_width=True)
-        render_report_visualizations(core)
+        render_report_visualizations(core, genomics_only=True)
     with tabs[3]:
         render_analysis_annotations(entry["evidence"])
         st.subheader("Методы, качество и независимые проверки")
