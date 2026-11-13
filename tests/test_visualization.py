@@ -75,6 +75,9 @@ class VisualizationTests(unittest.TestCase):
         self.assertIn("dmel", dot)
         self.assertIn("95", dot)
         self.assertIn("dyak", dot)
+        self.assertIn('color="#FFFFFF"', dot)
+        self.assertIn('fontcolor="#FFFFFF"', dot)
+        self.assertIn('fillcolor="transparent"', dot)
         with self.assertRaises(ValueError):
             newick_to_dot(";")
 
