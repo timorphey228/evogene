@@ -1,0 +1,9 @@
+# СИНТЕЗ 2026 visual identity (from the supplied presentation template).
+# Streamlit-native theme keeps controls, charts, alerts and menus legible.
+[theme]
+base = "dark"
+primaryColor = "#C4F747"
+backgroundColor = "#0F1010"
+secondaryBackgroundColor = "#191B1C"
+textColor = "#E6E6E6"
+font = "monospace"
