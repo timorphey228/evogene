@@ -15,13 +15,11 @@ from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import math
 import random
-import shutil
 import subprocess
 
 from Bio import AlignIO, Phylo
-from Bio.Phylo.TreeConstruction import DistanceCalculator, DistanceMatrix, DistanceTreeConstructor
+from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
 from Bio.Align import MultipleSeqAlignment
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
