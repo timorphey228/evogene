@@ -175,6 +175,26 @@ def _run(file,focal,chosen,te,phylogeny,cache):
     return
 
 
+def _hypothesis_summary_rows(hypotheses):
+    """Count diagnostic signals; qualitative statuses are not probabilities."""
+    confidence = {
+        "candidate": "Предварительная",
+        "partial_signal": "Низкая (слабые признаки)",
+        "no_signal": "Нет подтверждающих признаков",
+        "not_assessed": "Не определена",
+        "failed": "Не определена (ошибка)",
+    }
+    return [
+        {
+            "Гипотеза": h.get("label", h.get("mechanism", "—")),
+            "Поддерживающих признаков": len(h.get("arguments") or []),
+            "Уверенность системы": confidence.get(h.get("status"), "Не определена"),
+            "Статус проверки": STATUS.get(h.get("status"), h.get("status", "Не проверено")),
+        }
+        for h in hypotheses
+    ]
+
+
 def _hypothesis_panel(entry):
     result=entry.get("hypotheses",{})
     st.subheader("Эволюционные гипотезы")
@@ -182,6 +202,14 @@ def _hypothesis_panel(entry):
                "вероятностью происхождения. Категория не присваивается искусственно.")
     st.info("Итог: "+("предварительные кандидаты" if result.get("candidates") else
                        "недостаточно подтверждений для выбора механизма"))
+    hypotheses=result.get("hypotheses",[])
+    if hypotheses:
+        st.markdown("**Сводная таблица по всем гипотезам**")
+        st.dataframe(_hypothesis_summary_rows(hypotheses),
+                     hide_index=True,use_container_width=True)
+        st.caption("Количество признаков — число положительных диагностических сигналов, "
+                   "а не число найденных последовательностей. Уверенность дана качественно: "
+                   "вероятности происхождения не рассчитывались.")
     for h in result.get("hypotheses",[]):
         with st.expander(h["label"]+" · "+STATUS.get(h["status"],h["status"]),
                          expanded=h["status"] in ("candidate","partial_signal")):
