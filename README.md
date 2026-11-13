@@ -22,117 +22,139 @@ EvoGene помогает проверить, **как мог возникнут�
 
 Важное различие: **дерево сходства геномных фрагментов ещё не гарантирует дерево ортологичных генов**. Без достаточно надёжных гомологов дерево не строится.
 
-## Быстрый запуск на macOS / Linux
+## Установка и запуск на новом Mac — строго по порядку
 
-Требуется **Python 3.11+**. Для автоматического режима также нужны сторонние программы **NCBI Datasets CLI** и **minimap2**; для биологически более содержательных деревьев рекомендуются **MAFFT** и **IQ-TREE 2**. Их необходимо установить отдельно от Python-библиотек.
+**Сначала устанавливаем все необходимые программы, проверяем их и Python. Только после успешной проверки запускаем EvoGene.** Сами `datasets` и `minimap2` не устанавливаются командой `pip install -r requirements.txt`.
 
-```bash
-git clone https://github.com/timorphey228/evogene.git
-cd evogene
+### 1. Установите Homebrew
 
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m streamlit run auto_app.py
-```
+Откройте **Терминал** и проверьте:
 
-Обычно Streamlit открывается по адресу **http://localhost:8501**.
+~~~bash
+brew --version
+~~~
 
-**Если в приглашении терминала уже написано `(.venv)`, окружение может быть активировано.** Проверьте `which python` и `echo $VIRTUAL_ENV`; не нужно повторно активировать `.venv` в другой папке.
+Если написано `command not found: brew`, установите Homebrew по инструкции на **https://brew.sh/**. После установки выполните команды настройки `PATH`, которые предложит Homebrew, и снова проверьте `brew --version`. Для Apple Silicon путь Homebrew обычно `/opt/homebrew/bin`, для Intel — `/usr/local/bin`.
 
-Для обновления:
+### 2. Установите Python и необходимые биоинформатические программы
 
-```bash
-git switch main
-git pull origin main
-python -m streamlit run auto_app.py
-```
+~~~bash
+# Python для окружения проекта; minimap2 — для геномного картирования
+brew install python@3.12 minimap2
 
-Проверка доступности внешних программ выполняется интерфейсом. Без `datasets` и `minimap2` автоматическая загрузка/сопоставление геномов не запускается.
+# MAFFT — для настоящего множественного выравнивания (рекомендуется)
+brew install mafft
 
-## Установка NCBI Datasets CLI и minimap2 на новом компьютере
-
-Если в EvoGene написано `datasets: не найден` или `minimap2: не найден`, кнопка **«Запустить исследование»** будет недоступна. Это **не ошибка FASTA**: приложению нужны две отдельные программы, которые **не устанавливаются** командой `pip install -r requirements.txt`.
-
-- **`datasets`** — получает референсные геномы и аннотации из NCBI.
-- **`minimap2`** — сопоставляет ген-кандидат с референсными геномами.
-
-### macOS (MacBook с Apple Silicon или Intel) — рекомендуемый способ
-
-Откройте приложение «Терминал». Установите [Homebrew](https://brew.sh/), если его ещё нет; проверьте командой `brew --version`. После этого выполните:
-
-```bash
-# 1. Установить minimap2 из официального Homebrew
-brew install minimap2
-
-# 2. Установить официальный бинарный NCBI Datasets CLI для macOS
+# NCBI Datasets CLI: официальный бинарный файл для macOS
 mkdir -p "$HOME/bin"
 curl -fL --retry 3 \
   "https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/mac/datasets" \
   -o "$HOME/bin/datasets"
 chmod +x "$HOME/bin/datasets"
 
-# 3. Сделать datasets доступным из текущего терминала
+# Чтобы datasets работал в этом терминале
 export PATH="$HOME/bin:$PATH"
+~~~
 
-# 4. Проверить установку
-datasets version
-minimap2 --version
-```
+**Для ML-деревьев с расчётом поддержки ветвей** дополнительно установите **IQ-TREE 2**:
 
-**Зачем `~/bin`?** EvoGene ищет `datasets` в этой папке даже тогда, когда её нет в переменной `PATH`. Чтобы команда `datasets` работала и в **новом** окне терминала (zsh), можно добавить путь в настройки оболочки:
+~~~bash
+brew install brewsci/bio/iqtree2
+~~~
 
-```bash
+При отсутствии IQ-TREE 2 EvoGene может использовать NJ-дерево после MAFFT; без MAFFT — только **предварительную 7-mer NJ-кластеризацию без поддержки**. Не выдавайте такую кластеризацию за подтверждённую филогению.
+
+Чтобы `datasets` находился и в **новых окнах терминала** (zsh), добавьте `~/bin` в `PATH`:
+
+~~~bash
 touch "$HOME/.zshrc"
 grep -qxF 'export PATH="$HOME/bin:$PATH"' "$HOME/.zshrc" || \
   echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.zshrc"
 source "$HOME/.zshrc"
-```
+~~~
 
-Проверьте местонахождение исполняемых файлов и их доступность **из самого Python-проекта**:
+### 3. Убедитесь, что программы действительно установлены
 
-```bash
-command -v datasets
-command -v minimap2
+**Не переходите к запуску**, пока эти команды не работают:
 
-cd evogene  # если вы ещё не в каталоге проекта
-python3 -c "from evogene.tools import check_tools; print(check_tools())"
-```
-
-Для обоих инструментов в результате `check_tools()` должно быть `'ok': True`. Путь к репозиторию может отличаться; команда `cd evogene` выполняется из его родительской папки, а если вы уже в проекте — пропустите её.
-
-### Если установлен Conda / Miniforge
-
-Альтернативный официальный способ — установить оба инструмента из `conda-forge` **в то окружение Conda, из которого будете запускать EvoGene**:
-
-```bash
-conda install -c conda-forge ncbi-datasets-cli minimap2
-datasets version
+~~~bash
+python3.12 --version
+"$HOME/bin/datasets" --version
 minimap2 --version
-```
-
-При использовании `venv` вместо Conda предпочтителен способ macOS выше: бинарные программы не зависят от Python-виртуального окружения.
-
-### Для более надёжной филогенетики (необязательно)
-
-```bash
-brew install mafft iqtree
 mafft --version
-iqtree2 --version  # в некоторых версиях команда называется iqtree
-```
+iqtree2 --version    # если установили IQ-TREE 2
+~~~
 
-При наличии **MAFFT + IQ-TREE 2** EvoGene пытается построить ML-дерево с поддержкой ветвей. Если они отсутствуют, программа может показать **только предварительную NJ-кластеризацию по 7-мерам без поддержки**, что не является подтверждённой филогенией гена.
+Для обязательных программ `datasets` и `minimap2` должен появиться **номер версии**, а не ошибка. Программа EvoGene также проверяет `datasets --version` локально, без обязательного запроса к серверам NCBI.
 
-### Если EvoGene всё ещё пишет «не найден»
+**Если `datasets` не запускается:** проверьте `ls -l "$HOME/bin/datasets"` и повторите скачивание со второго шага. Если `minimap2` не находится, проверьте `command -v minimap2` и настройку Homebrew `PATH`.
 
-1. Завершите текущий Streamlit-процесс сочетанием **Ctrl+C** и запустите снова: `python -m streamlit run auto_app.py`.
-2. Убедитесь, что обе команды `datasets version` и `minimap2 --version` работают **в том терминале, из которого запускается Streamlit**.
-3. Выполните `python3 -c "from evogene.tools import check_tools; print(check_tools())"`. В нём виден реальный путь к найденному бинарному файлу или причина ошибки.
-4. Если `brew` не находится, проверьте, установлен ли Homebrew, и настройте `PATH` по инструкции `brew shellenv` для вашей архитектуры Mac.
-5. `(.venv)` перед приглашением терминала означает, что виртуальное окружение, вероятно, уже активировано; повторный `source .venv/bin/activate` может быть не нужен.
+### 4. Подготовьте проект и Python-библиотеки
 
-Официальные инструкции: [NCBI Datasets — Download and Install](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/command-line-start/) и [Homebrew minimap2](https://formulae.brew.sh/formula/minimap2).
+Если клонируете **впервые**:
+
+~~~bash
+git clone https://github.com/timorphey228/evogene.git
+cd evogene
+~~~
+
+Если папка `evogene` **уже есть**, не клонируйте второй раз: откройте её в терминале и выполните:
+
+~~~bash
+git switch main
+git pull origin main
+~~~
+
+Находясь **внутри каталога репозитория**:
+
+~~~bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+~~~
+
+Если у вас уже активировано подходящее виртуальное окружение, заново выполнять `source` не нужно. Проверьте `which python` и `echo $VIRTUAL_ENV`.
+
+### 5. Обязательная проверка готовности EvoGene
+
+**Из папки проекта, после установки Python-зависимостей:**
+
+~~~bash
+python - <<'PY'
+from evogene.tools import check_tools
+status = check_tools()
+for name, info in status.items():
+    print(f"{name}: {'ГОТОВ' if info['ok'] else 'ОШИБКА'}")
+    print("  путь:", info['path'])
+    print("  детали:", info['detail'])
+if not all(info['ok'] for info in status.values()):
+    raise SystemExit("Установите datasets и minimap2 по шагам выше.")
+PY
+~~~
+
+**Нужный результат: `datasets: ГОТОВ` и `minimap2: ГОТОВ`.** Если один из статусов «ОШИБКА», запускать автоматический анализ пока рано. Если инструменты установлены, но не обнаруживаются, перезапустите терминал и повторите проверку.
+
+При наличии интернета дополнительно можно проверить доступ к NCBI (без скачивания целого генома):
+
+~~~bash
+datasets summary genome accession GCF_000754195.2 >/dev/null && \
+  echo "NCBI отвечает"
+~~~
+
+### 6. Только теперь запустите EvoGene
+
+~~~bash
+python -m streamlit run auto_app.py
+~~~
+
+Обычно интерфейс откроется по адресу **http://localhost:8501**. Загрузите FASTA кандидатных генов и выберите сравнительные виды. Если Streamlit был запущен ещё до установки программ, остановите его через **Ctrl+C** и запустите заново.
+
+**Альтернативный способ для Conda/Miniforge:** вместо установки `datasets`/`minimap2` через Homebrew и прямое скачивание можно активировать Conda-окружение и выполнить `conda install -c conda-forge ncbi-datasets-cli minimap2`. Не смешивайте бессистемно несколько Python-окружений; EvoGene нужно запускать из того окружения, где установлены его зависимости.
+
+**Источники:** [официальная установка NCBI Datasets](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/command-line-start/), [Homebrew minimap2](https://formulae.brew.sh/formula/minimap2), [Homebrew MAFFT](https://formulae.brew.sh/formula/mafft), [IQ-TREE 2](https://github.com/iqtree/iqtree2/wiki/Quickstart).
+
+---
 
 ## Сценарий исследования
 
