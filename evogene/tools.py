@@ -28,7 +28,7 @@ def check_tools():
                            'detail':'Исполняемый файл не найден. Проверьте ~/bin и /opt/homebrew/bin.'}
             continue
         try:
-            p=subprocess.run([exe, 'version' if name=='datasets' else '--version'],
+            p=subprocess.run([exe, '--version'],
                              capture_output=True, text=True, timeout=20)
             lines=(p.stdout+'\n'+p.stderr).strip()
             results[name]={'ok':p.returncode==0,'path':exe,
